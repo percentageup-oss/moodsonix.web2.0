@@ -1,6 +1,6 @@
 export interface Song {
-  id: string; // YouTube Video ID
-  source: 'youtube';
+  id: string; // YouTube Video ID or track ID
+  source: 'youtube' | 'audio';
   title: string;
   artist: string;
   channel: string;
@@ -8,6 +8,7 @@ export interface Song {
   thumbnail: string;
   duration: number; // in seconds
   url: string;
+  audioUrl?: string; // Direct stream URL for native <audio> playback
   isPlayable: boolean;
 }
 

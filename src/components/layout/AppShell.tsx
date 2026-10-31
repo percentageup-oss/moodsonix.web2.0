@@ -51,7 +51,7 @@ export const AppShell: React.FC = () => {
     toggleMute,
     nextTrack,
     previousTrack,
-    playSong,
+    cueSong,
     isNowPlayingOpen,
     setIsNowPlayingOpen
   } = usePlayer();
@@ -69,25 +69,36 @@ export const AppShell: React.FC = () => {
     setIsShareOpen(true);
   };
 
-  // Deep-link check for "?song=VIDEO_ID" on load
+  // Deep-link check for "?song=VIDEO_ID" on load: cue track so first play comes from a user tap
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedId = urlParams.get('song');
-    if (sharedId) {
-      playSong({
-        id: sharedId,
-        source: 'youtube',
-        title: 'Playing shared track',
-        artist: 'YouTube Music',
-        channel: 'YouTube',
-        album: null,
-        thumbnail: `https://i.ytimg.com/vi/${sharedId}/hqdefault.jpg`,
-        duration: 180,
-        url: `https://www.youtube.com/watch?v=${sharedId}`,
-        isPlayable: true
-      });
-    }
-  }, [playSong]);
+    if (!sharedId) return;
+
+    const fallbackSong: Song = {
+      id: sharedId,
+      source: 'youtube',
+      title: 'Shared Track',
+      artist: 'YouTube Music',
+      channel: 'YouTube',
+      album: null,
+      thumbnail: `https://i.ytimg.com/vi/${sharedId}/hqdefault.jpg`,
+      duration: 180,
+      url: `https://www.youtube.com/watch?v=${sharedId}`,
+      isPlayable: true
+    };
+
+    cueSong(fallbackSong);
+
+    fetch(`/api/song/${encodeURIComponent(sharedId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((songData) => {
+        if (songData && songData.id) {
+          cueSong(songData);
+        }
+      })
+      .catch(() => {});
+  }, [cueSong]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {

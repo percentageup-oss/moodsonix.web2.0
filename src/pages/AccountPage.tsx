@@ -31,7 +31,6 @@ export const AccountPage: React.FC<AccountPageProps> = ({ onOpenTools, onOpenSho
 
   const handleClearCache = () => {
     localStorage.removeItem('moodsonix_last_song');
-    alert('Playback cache reset.');
   };
 
   return (

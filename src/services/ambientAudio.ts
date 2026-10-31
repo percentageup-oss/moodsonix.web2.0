@@ -12,14 +12,25 @@ class AmbientAudioEngine {
 
   // Campfire nodes
   private campfireGain: GainNode | null = null;
+  private campfireRoarSource: AudioBufferSourceNode | null = null;
   private campfireTimer: any = null;
   private isCampfirePlaying = false;
 
   // Nature nodes
   private natureGain: GainNode | null = null;
   private natureWindSource: AudioBufferSourceNode | null = null;
+  private natureLfo: OscillatorNode | null = null;
   private natureChirpTimer: any = null;
   private isNaturePlaying = false;
+
+  // Resume an already-created AudioContext during a user gesture
+  public async resumeContext(): Promise<void> {
+    if (this.ctx && this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch {}
+    }
+  }
 
   private initContext() {
     if (!this.ctx) {
@@ -30,7 +41,7 @@ class AmbientAudioEngine {
       this.masterGain.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
   }
 
@@ -126,6 +137,7 @@ class AmbientAudioEngine {
       const roarSource = this.ctx.createBufferSource();
       roarSource.buffer = roarBuffer;
       roarSource.loop = true;
+      this.campfireRoarSource = roarSource;
 
       const roarFilter = this.ctx.createBiquadFilter();
       roarFilter.type = 'lowpass';
@@ -179,6 +191,10 @@ class AmbientAudioEngine {
         clearTimeout(this.campfireTimer);
         this.campfireTimer = null;
       }
+      if (this.campfireRoarSource) {
+        try { this.campfireRoarSource.stop(); this.campfireRoarSource.disconnect(); } catch {}
+        this.campfireRoarSource = null;
+      }
       if (this.campfireGain) {
         try { this.campfireGain.disconnect(); } catch {}
         this.campfireGain = null;
@@ -218,6 +234,7 @@ class AmbientAudioEngine {
       lfo.connect(lfoGain);
       lfoGain.connect(windFilter.frequency);
       lfo.start(0);
+      this.natureLfo = lfo;
 
       this.natureWindSource.connect(windFilter);
       windFilter.connect(this.natureGain);
@@ -257,6 +274,10 @@ class AmbientAudioEngine {
       if (this.natureChirpTimer) {
         clearTimeout(this.natureChirpTimer);
         this.natureChirpTimer = null;
+      }
+      if (this.natureLfo) {
+        try { this.natureLfo.stop(); this.natureLfo.disconnect(); } catch {}
+        this.natureLfo = null;
       }
       if (this.natureWindSource) {
         try { this.natureWindSource.stop(); this.natureWindSource.disconnect(); } catch {}

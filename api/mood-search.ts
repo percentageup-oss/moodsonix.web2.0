@@ -20,12 +20,19 @@ export default async function handler(req: any, res: any) {
 
   if (process.env.GEMINI_API_KEY) {
     try {
-      const ai = new GoogleGenAI();
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
       const prompt = `You are a music curator for Moodsonix. Given the user's mood or vibe description: "${mood}", generate a concise, highly effective 3 to 6 word YouTube Music search query string that returns songs matching this mood.
 Respond ONLY with the search query string. No quotes, no markdown, no punctuation.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt
       });
 

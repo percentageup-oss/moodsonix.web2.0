@@ -82,6 +82,12 @@ function brandPixel(x, y, w, h, isMaskable = false) {
   g = Math.max(10, Math.min(25, g));
   b = Math.max(15, Math.min(36, b));
 
+  // Scale inner artwork inside 80% safe zone for maskable icons
+  const safeScale = isMaskable ? 0.82 : 1.0;
+  const sx = cx + (x - cx) / safeScale;
+  const sy = cy + (y - cy) / safeScale;
+  const sDist = dist / safeScale;
+
   // Sound bars normalized coordinates:
   const scale = w / 512;
   const bars = [
@@ -93,7 +99,7 @@ function brandPixel(x, y, w, h, isMaskable = false) {
   ];
 
   for (const bar of bars) {
-    if (x >= bar.x && x <= bar.x + bar.w && y >= bar.y && y <= bar.y + bar.h) {
+    if (sx >= bar.x && sx <= bar.x + bar.w && sy >= bar.y && sy <= bar.y + bar.h) {
       // Lime accent #C8F542 (200, 245, 66)
       return [200, 245, 66, 255];
     }
@@ -101,7 +107,7 @@ function brandPixel(x, y, w, h, isMaskable = false) {
 
   // Rounded outer circle ring
   const ringR = 190 * scale;
-  if (Math.abs(dist - ringR) < 2 * scale) {
+  if (Math.abs(sDist - ringR) < 2 * scale) {
     return [32, 32, 42, 255];
   }
 
@@ -113,6 +119,7 @@ if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
 
 fs.writeFileSync(path.join(publicDir, 'pwa-192x192.png'), createPNG(192, 192, (x, y, w, h) => brandPixel(x, y, w, h, false)));
 fs.writeFileSync(path.join(publicDir, 'pwa-512x512.png'), createPNG(512, 512, (x, y, w, h) => brandPixel(x, y, w, h, false)));
+fs.writeFileSync(path.join(publicDir, 'pwa-maskable-192x192.png'), createPNG(192, 192, (x, y, w, h) => brandPixel(x, y, w, h, true)));
 fs.writeFileSync(path.join(publicDir, 'pwa-maskable-512x512.png'), createPNG(512, 512, (x, y, w, h) => brandPixel(x, y, w, h, true)));
 fs.writeFileSync(path.join(publicDir, 'apple-touch-icon.png'), createPNG(180, 180, (x, y, w, h) => brandPixel(x, y, w, h, false)));
 fs.writeFileSync(path.join(publicDir, 'favicon.ico'), createPNG(32, 32, (x, y, w, h) => brandPixel(x, y, w, h, false)));

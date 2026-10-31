@@ -118,17 +118,17 @@ async function searchItunesFallback(query: string, signal?: AbortSignal): Promis
     if (!isJson || !data || !Array.isArray(data.results)) return [];
 
     return data.results.map((item: any, idx: number): Song => ({
-      // Note: For iTunes tracks, we set a fallback ID that can be resolved or searched
       id: `itunes_${item.trackId || idx}`,
-      source: 'youtube',
+      source: item.previewUrl ? 'audio' : 'youtube',
       title: item.trackName || 'Unknown Title',
       artist: item.artistName || 'Unknown Artist',
       channel: item.artistName || 'Apple Music',
       album: item.collectionName || null,
-      thumbnail: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '400x400bb') : '',
-      duration: Math.round((item.trackTimeMillis || 180000) / 1000),
+      thumbnail: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '512x512bb') : '',
+      duration: item.previewUrl ? 30 : Math.round((item.trackTimeMillis || 180000) / 1000),
       url: item.trackViewUrl || '',
-      isPlayable: true
+      audioUrl: item.previewUrl || undefined,
+      isPlayable: Boolean(item.previewUrl)
     }));
   } catch {
     return [];

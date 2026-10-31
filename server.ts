@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { Innertube, UniversalCache, Log, Parser } from 'youtubei.js';
 import { GoogleGenAI } from '@google/genai';
 import path from 'path';
-import { Song, LyricsData, LyricLine, PlaylistInfo } from './src/types/music';
+import type { Song, LyricsData, LyricLine, PlaylistInfo } from './src/types/music.ts';
 
 // Silence YouTube.js decipher warnings and unmapped parser view errors (ListView, ListItemView, etc.)
 try {
@@ -288,7 +288,14 @@ app.post('/api/mood-search', async (req: Request, res: Response) => {
   // Attempt Gemini API if key is available
   if (process.env.GEMINI_API_KEY) {
     try {
-      const ai = new GoogleGenAI();
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
       const prompt = `You are a music curator for Moodsonix. Given the user's mood or vibe description: "${mood}", generate a concise, highly effective 3 to 6 word YouTube Music search query string that returns songs matching this mood.
 Examples:
 Mood: "rainy night study" -> "ambient rainy night study lofi instrumental"
@@ -298,7 +305,7 @@ Mood: "nostalgic drive" -> "synthwave retro 80s night drive"
 Respond ONLY with the search query string. No quotes, no markdown, no punctuation.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt
       });
 
@@ -616,7 +623,8 @@ app.get('/api/song/:id', async (req: Request, res: Response) => {
 
 // Mount Vite or serve static production build
 async function startServer() {
-  const isDev = process.env.NODE_ENV !== 'production';
+  const isProd = process.env.NODE_ENV === 'production' || process.env.npm_lifecycle_event === 'start';
+  const isDev = !isProd;
 
   if (isDev) {
     const { createServer: createViteServer } = await import('vite');
