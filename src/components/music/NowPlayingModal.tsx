@@ -17,7 +17,8 @@ import {
   Share2,
   ListMusic,
   FileText,
-  Sliders
+  Sliders,
+  Tv
 } from 'lucide-react';
 import { LyricsPanel } from './LyricsPanel';
 import { QualityMenu } from './QualityMenu';
@@ -47,7 +48,8 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
     cycleRepeatMode,
     toggleShuffle,
     nextTrack,
-    previousTrack
+    previousTrack,
+    toggleVideo
   } = usePlayer();
 
   const { queue, toggleLike, isLiked } = useQueue();
@@ -131,6 +133,17 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
                 alt={currentSong.title}
                 className="w-full h-full object-cover"
               />
+              <button
+                onClick={() => {
+                  toggleVideo();
+                  onClose();
+                }}
+                className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-xs font-semibold text-white flex items-center gap-1.5 hover:bg-[var(--accent)] hover:text-black transition-all"
+                title="Switch to video view"
+              >
+                <Tv className="w-3.5 h-3.5" />
+                <span>Video View</span>
+              </button>
               <div className="absolute bottom-3 right-3 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md">
                 <MiniVisualizer isPlaying={isPlaying} barCount={5} />
               </div>

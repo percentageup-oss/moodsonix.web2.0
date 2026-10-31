@@ -1,0 +1,30 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/search",
+      "destination": "/api/search.ts"
+    },
+    {
+      "source": "/api/mood-search",
+      "destination": "/api/mood-search.ts"
+    },
+    {
+      "source": "/api/lyrics",
+      "destination": "/api/lyrics.ts"
+    },
+    {
+      "source": "/api/playlist",
+      "destination": "/api/playlist.ts"
+    },
+    {
+      "source": "/api/song/:id",
+      "destination": "/api/song.ts?id=:id"
+    },
+    {
+      "source": "/((?!api/.*).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

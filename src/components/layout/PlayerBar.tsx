@@ -18,6 +18,7 @@ import {
   ListMusic,
   Maximize2,
   AlertCircle,
+  Tv,
   X
 } from 'lucide-react';
 import { QualityMenu } from '../music/QualityMenu';
@@ -43,6 +44,8 @@ export const PlayerBar: React.FC = () => {
     previousTrack,
     isNowPlayingOpen,
     setIsNowPlayingOpen,
+    isVideoOpen,
+    toggleVideo,
     playerError,
     clearPlayerError
   } = usePlayer();
@@ -252,8 +255,23 @@ export const PlayerBar: React.FC = () => {
             </div>
           </div>
 
-          {/* Right: Quality, Lyrics, Volume, Expand */}
+          {/* Right: Video Dock, Quality, Lyrics, Volume, Expand */}
           <div className="flex items-center justify-end gap-2.5 w-1/4 min-w-[200px]">
+            {/* Video Player Toggle */}
+            <button
+              onClick={toggleVideo}
+              className={cn(
+                'p-2 rounded-lg transition-colors flex items-center gap-1 text-xs',
+                isVideoOpen
+                  ? 'bg-[var(--accent)] text-black font-semibold'
+                  : 'text-[var(--text-muted)] hover:text-white hover:bg-[var(--surface)]'
+              )}
+              title={isVideoOpen ? 'Close video window' : 'Watch video stream'}
+            >
+              <Tv className="w-4 h-4" />
+              <span className="hidden lg:inline text-[11px]">Video</span>
+            </button>
+
             {/* Lyrics opener */}
             <button
               onClick={() => setIsNowPlayingOpen(true)}

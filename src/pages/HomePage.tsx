@@ -3,6 +3,7 @@ import { useUser } from '../context/UserContext';
 import { useQueue } from '../context/QueueContext';
 import { usePlayer } from '../context/PlayerContext';
 import { Song } from '../types/music';
+import { searchMusic } from '../services/musicApi';
 import { SongCard } from '../components/music/SongCard';
 import { SongRow } from '../components/music/SongRow';
 import {
@@ -69,12 +70,9 @@ export const HomePage: React.FC<HomePageProps> = ({
         const query = likedSongs.length > 0
           ? `${likedSongs[0].artist} music`
           : 'top hits music chill';
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.results)) {
-            setFeaturedTracks(data.results.slice(0, 10));
-          }
+        const { results } = await searchMusic(query);
+        if (results && results.length > 0) {
+          setFeaturedTracks(results.slice(0, 10));
         }
       } catch {
         // Ignored

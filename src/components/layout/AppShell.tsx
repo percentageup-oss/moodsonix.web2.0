@@ -9,6 +9,7 @@ import { PlaylistImporterModal } from '../music/PlaylistImporterModal';
 import { KeyboardShortcutsModal } from '../common/KeyboardShortcutsModal';
 import { ShareSongModal } from '../common/ShareSongModal';
 import { NowPlayingModal } from '../music/NowPlayingModal';
+import { VideoPlayerDock } from '../music/VideoPlayerDock';
 import { AuthModal } from '../common/AuthModal';
 import { OfflineBanner } from '../common/OfflineBanner';
 import { WelcomeSplash } from '../common/WelcomeSplash';
@@ -73,14 +74,18 @@ export const AppShell: React.FC = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedId = urlParams.get('song');
     if (sharedId) {
-      fetch(`/api/song/${sharedId}`)
-        .then(res => res.json())
-        .then(song => {
-          if (song && song.id) {
-            playSong(song);
-          }
-        })
-        .catch(() => {});
+      playSong({
+        id: sharedId,
+        source: 'youtube',
+        title: 'Playing shared track',
+        artist: 'YouTube Music',
+        channel: 'YouTube',
+        album: null,
+        thumbnail: `https://i.ytimg.com/vi/${sharedId}/hqdefault.jpg`,
+        duration: 180,
+        url: `https://www.youtube.com/watch?v=${sharedId}`,
+        isPlayable: true
+      });
     }
   }, [playSong]);
 
@@ -139,10 +144,8 @@ export const AppShell: React.FC = () => {
       {/* Offline Connectivity Banner */}
       <OfflineBanner />
 
-      {/* Hidden YouTube IFrame Player container */}
-      <div className="absolute -top-[9999px] -left-[9999px] w-1 h-1 pointer-events-none opacity-0 overflow-hidden">
-        <div id="youtube-player-iframe" />
-      </div>
+      {/* Persistent & Reliable YouTube Audio/Video Dock */}
+      <VideoPlayerDock />
 
       {/* Desktop Sidebar (Fixed 240px) */}
       <div className="hidden md:block shrink-0">

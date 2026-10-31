@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Song } from '../types/music';
+import { searchMusic } from '../services/musicApi';
 import { useUser } from '../context/UserContext';
 import { SongRow } from '../components/music/SongRow';
 import { SongCard } from '../components/music/SongCard';
@@ -59,27 +60,13 @@ export const SearchPage: React.FC<SearchPageProps> = ({ initialQuery = '', onSha
     setGeneratedMoodQuery(null);
 
     try {
-      if (useMood) {
-        // AI Mood-to-Search route
-        const res = await fetch('/api/mood-search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mood: trimmed }),
-          signal: abortControllerRef.current.signal
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Mood search failed');
-        setGeneratedMoodQuery(data.generatedQuery);
-        setResults(data.results || []);
-      } else {
-        // Standard YouTube Music search
-        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
-          signal: abortControllerRef.current.signal
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Search failed');
-        setResults(data.results || []);
-      }
+      const { results: searchResults, generatedQuery } = await searchMusic(
+        trimmed,
+        useMood,
+        abortControllerRef.current.signal
+      );
+      setGeneratedMoodQuery(generatedQuery || null);
+      setResults(searchResults || []);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         setError(err.message || 'Failed to search YouTube Music');

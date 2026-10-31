@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQueue } from '../../context/QueueContext';
 import { usePlayer } from '../../context/PlayerContext';
 import { PlaylistInfo } from '../../types/music';
+import { fetchPlaylist } from '../../services/musicApi';
 import { cn } from '../../lib/utils';
 import { X, ListPlus, Play, Loader2, AlertCircle, CheckCircle2, Music } from 'lucide-react';
 
@@ -32,12 +33,7 @@ export const PlaylistImporterModal: React.FC<PlaylistImporterModalProps> = ({ is
     setSuccessMsg(null);
 
     try {
-      const res = await fetch(`/api/playlist?url=${encodeURIComponent(inputUrl.trim())}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to import playlist');
-      }
+      const data = await fetchPlaylist(inputUrl.trim());
 
       if (!data.tracks || data.tracks.length === 0) {
         throw new Error('Playlist contains no playable tracks or is restricted');

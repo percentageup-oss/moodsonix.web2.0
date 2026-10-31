@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Song, LyricsData } from '../types/music';
+import { fetchLyrics as fetchLyricsService } from '../services/musicApi';
 
 export function useLyrics(currentSong: Song | null, currentTime: number) {
   const [lyrics, setLyrics] = useState<LyricsData | null>(null);
@@ -20,23 +21,9 @@ export function useLyrics(currentSong: Song | null, currentTime: number) {
 
     const controller = new AbortController();
 
-    const fetchLyrics = async () => {
+    const loadLyrics = async () => {
       try {
-        const params = new URLSearchParams({
-          id: currentSong.id,
-          title: currentSong.title,
-          artist: currentSong.artist,
-          duration: (currentSong.duration || 0).toString()
-        });
-
-        const res = await fetch(`/api/lyrics?${params.toString()}`, {
-          signal: controller.signal
-        });
-
-        if (!res.ok) throw new Error('Lyrics request failed');
-        const data: LyricsData = await res.json();
-
-        // Check if track is still the current active track
+        const data = await fetchLyricsService(currentSong, controller.signal);
         if (activeSongId.current === currentSong.id) {
           setLyrics(data);
           setIsLoading(false);
@@ -49,7 +36,7 @@ export function useLyrics(currentSong: Song | null, currentTime: number) {
       }
     };
 
-    fetchLyrics();
+    loadLyrics();
 
     return () => {
       controller.abort();

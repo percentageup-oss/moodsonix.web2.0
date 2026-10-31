@@ -22,6 +22,9 @@ interface PlayerContextType {
   quality: string;
   isNowPlayingOpen: boolean;
   setIsNowPlayingOpen: (open: boolean) => void;
+  isVideoOpen: boolean;
+  setIsVideoOpen: (open: boolean) => void;
+  toggleVideo: () => void;
   playSong: (song: Song) => void;
   togglePlay: () => void;
   pause: () => void;
@@ -64,13 +67,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isShuffled, setIsShuffled] = useState<boolean>(false);
   const [quality, setQualityState] = useState<string>('auto');
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
+  const [isVideoOpen, setIsVideoOpen] = useState<boolean>(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
 
   const playerRef = useRef<any>(null);
   const isPlayerReady = useRef<boolean>(false);
+  const pendingSongRef = useRef<Song | null>(null);
   const timeUpdateInterval = useRef<any>(null);
 
   const isPlaying = playbackState === 'playing';
+
+  const toggleVideo = () => {
+    setIsVideoOpen(prev => !prev);
+  };
 
   // Save volume preference
   const setVolume = (val: number) => {
@@ -139,12 +148,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           videoId: song.id,
           startSeconds: 0
         });
+        playerRef.current.unMute();
+        playerRef.current.setVolume(volume);
         playerRef.current.playVideo();
       } catch (err) {
         console.error('[Moodsonix] Player loadVideoById error:', err);
       }
+    } else {
+      pendingSongRef.current = song;
     }
-  }, [addToHistory]);
+  }, [addToHistory, volume]);
 
   const pause = () => {
     if (playerRef.current && isPlayerReady.current) {
@@ -154,7 +167,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const resume = () => {
     if (playerRef.current && isPlayerReady.current) {
-      try { playerRef.current.playVideo(); } catch {}
+      try {
+        playerRef.current.unMute();
+        playerRef.current.playVideo();
+      } catch {}
+    } else if (currentSong) {
+      playSong(currentSong);
     }
   };
 
@@ -282,8 +300,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           events: {
             onReady: (event: any) => {
               isPlayerReady.current = true;
-              event.target.setVolume(volume);
+              try {
+                event.target.setVolume(volume);
+                event.target.unMute();
+              } catch {}
               console.log('[Moodsonix] YouTube IFrame Player ready.');
+              if (pendingSongRef.current) {
+                const pending = pendingSongRef.current;
+                pendingSongRef.current = null;
+                playSong(pending);
+              }
             },
             onStateChange: handleStateChange,
             onError: handleError
@@ -388,6 +414,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         quality,
         isNowPlayingOpen,
         setIsNowPlayingOpen,
+        isVideoOpen,
+        setIsVideoOpen,
+        toggleVideo,
         playSong,
         togglePlay,
         pause,
