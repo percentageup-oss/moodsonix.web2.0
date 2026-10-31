@@ -67,7 +67,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isShuffled, setIsShuffled] = useState<boolean>(false);
   const [quality, setQualityState] = useState<string>('auto');
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
-  const [isVideoOpen, setIsVideoOpen] = useState<boolean>(false);
+  const [isVideoOpen, setIsVideoOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('moodsonix_video_toggle');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [playerError, setPlayerError] = useState<string | null>(null);
 
   const playerRef = useRef<any>(null);
@@ -93,9 +100,22 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const isPlaying = playbackState === 'playing';
 
-  const toggleVideo = () => {
-    setIsVideoOpen(prev => !prev);
-  };
+  const toggleVideo = useCallback(() => {
+    setIsVideoOpen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('moodsonix_video_toggle', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const handleSetIsVideoOpen = useCallback((open: boolean) => {
+    setIsVideoOpen(open);
+    try {
+      localStorage.setItem('moodsonix_video_toggle', String(open));
+    } catch {}
+  }, []);
 
   // Helper to safely update MediaSession position state
   const syncPositionState = useCallback((pos?: number, dur?: number) => {
@@ -729,7 +749,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isNowPlayingOpen,
         setIsNowPlayingOpen,
         isVideoOpen,
-        setIsVideoOpen,
+        setIsVideoOpen: handleSetIsVideoOpen,
         toggleVideo,
         playSong,
         togglePlay,

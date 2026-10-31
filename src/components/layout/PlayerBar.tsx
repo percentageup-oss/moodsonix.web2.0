@@ -103,6 +103,20 @@ export const PlayerBar: React.FC = () => {
           {/* Quick Actions */}
           <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
+              onClick={toggleVideo}
+              className={cn(
+                'p-2 rounded-lg transition-colors',
+                isVideoOpen
+                  ? 'bg-[var(--accent)] text-black font-semibold'
+                  : 'text-[var(--text-muted)] hover:text-white'
+              )}
+              title={isVideoOpen ? 'Hide video' : 'Show video'}
+              aria-label="Toggle video preview"
+            >
+              <Tv className="w-4 h-4" />
+            </button>
+
+            <button
               onClick={() => toggleLike(currentSong)}
               className={cn(
                 'p-2 rounded-full transition-colors',
