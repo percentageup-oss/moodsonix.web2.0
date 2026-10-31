@@ -166,8 +166,8 @@ export const AppShell: React.FC = () => {
             onClick={() => handleNavigate('home')}
             className="flex items-center gap-2 cursor-pointer"
           >
-            <div className="w-7 h-7 rounded-lg bg-[#14141F] border border-white/10 flex items-center justify-center">
-              <span className="w-2.5 h-2.5 rounded-full bg-[var(--accent)]" />
+            <div className="w-10 h-8 rounded-lg bg-[#0A0A0F] border border-white/10 flex items-center justify-center">
+              <img src="/logo-mark.png" alt="Moodsonix" className="w-7 h-auto select-none pointer-events-none" draggable={false} />
             </div>
             <h1 className="font-bold text-sm tracking-tight text-[var(--text-primary)]">
               Moodsonix

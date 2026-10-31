@@ -51,14 +51,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         onClick={() => onNavigate('home')}
         className="flex items-center gap-2.5 px-2 py-3 mb-4 cursor-pointer group"
       >
-        <div className="w-9 h-9 rounded-xl bg-[#14141F] border border-white/10 flex items-center justify-center shrink-0 group-hover:border-[var(--accent)]/40 transition-colors shadow-sm">
-          <svg className="w-5 h-5" viewBox="0 0 512 512">
-            <rect x="136" y="216" width="28" height="80" rx="14" fill="#C8F542" />
-            <rect x="184" y="156" width="28" height="200" rx="14" fill="#C8F542" />
-            <rect x="232" y="116" width="28" height="280" rx="14" fill="#C8F542" />
-            <rect x="280" y="176" width="28" height="160" rx="14" fill="#C8F542" />
-            <rect x="328" y="236" width="28" height="40" rx="14" fill="#C8F542" />
-          </svg>
+        <div className="w-12 h-10 rounded-xl bg-[#0A0A0F] border border-white/10 flex items-center justify-center shrink-0 group-hover:border-[var(--accent)]/40 transition-colors shadow-sm">
+          <img src="/logo-mark.png" alt="Moodsonix" className="w-10 h-auto select-none pointer-events-none" draggable={false} />
         </div>
         <div>
           <h1 className="font-bold text-base tracking-tight text-[var(--text-primary)] flex items-center gap-1.5">

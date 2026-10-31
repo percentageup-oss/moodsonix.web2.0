@@ -86,7 +86,7 @@ npm run dev
 | `npm start` | Production server — serves `dist/` and the API (run `npm run build` first) |
 | `npm run lint` | Type-check with `tsc --noEmit` |
 
-To regenerate the PWA icons in `public/`, run `node scripts/generate-icons.js` from the repository root.
+The app logo lives in `public/logo-mark.png`; the favicon and PWA / home-screen icons in `public/` are generated from it.
 
 ---
 
@@ -131,8 +131,6 @@ If the API can't be reached (for example on static hosting), the client keeps wo
 ```
 ├── api/                  Vercel serverless functions (search, mood-search, lyrics, playlist, song)
 ├── public/               PWA icons and static assets
-├── scripts/
-│   └── generate-icons.js Generates the PWA icon set
 ├── src/
 │   ├── components/       common/ · layout/ · music/ · tools/
 │   ├── context/          Player, Queue, Theme and User providers
