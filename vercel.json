@@ -15,6 +15,10 @@
       "destination": "/api/lyrics.ts"
     },
     {
+      "source": "/api/lyrics-netease",
+      "destination": "/api/lyrics-netease.ts"
+    },
+    {
       "source": "/api/playlist",
       "destination": "/api/playlist.ts"
     },

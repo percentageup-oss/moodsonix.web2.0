@@ -19,7 +19,7 @@ export interface LyricLine {
 
 export interface LyricsData {
   songId: string;
-  provider: 'lrclib' | 'youtube' | 'none';
+  provider: 'lrclib' | 'netease' | 'lyrics.ovh' | 'youtube' | 'none';
   syncedLyrics: LyricLine[] | null;
   plainLyrics: string | null;
   notFound: boolean;

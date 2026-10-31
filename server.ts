@@ -479,6 +479,125 @@ app.get('/api/lyrics', async (req: Request, res: Response) => {
   res.json(notFoundPayload);
 });
 
+// Netease Lyrics Proxy Endpoint (CORS proxy + closest duration matching + existing lyricsCache integration)
+app.get('/api/lyrics-netease', async (req: Request, res: Response) => {
+  const songId = ((req.query.id as string) || '').trim();
+  const artist = ((req.query.artist as string) || '').trim();
+  const title = ((req.query.title as string) || '').trim();
+  const targetDuration = parseFloat((req.query.duration as string) || '0') || 0;
+
+  const searchTerm = [artist, title].filter(Boolean).join(' ').trim();
+  if (!searchTerm) {
+    return res.status(200).json({ songId, lrc: null, notFound: true });
+  }
+
+  const neteaseHeaders = {
+    Referer: 'https://music.163.com/',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    Accept: 'application/json, text/plain, */*'
+  };
+
+  const fetchNeteaseJson = async (url: string, timeoutMs: number): Promise<any | null> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const upstream = await fetch(url, {
+        method: 'GET',
+        headers: neteaseHeaders,
+        signal: controller.signal
+      });
+      if (!upstream.ok) return null;
+
+      const contentType = (upstream.headers.get('content-type') || '').toLowerCase();
+      if (
+        (!contentType.includes('application/json') && !contentType.includes('text/plain')) ||
+        contentType.includes('text/html')
+      ) {
+        return null;
+      }
+
+      return await upstream.json();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const startTime = Date.now();
+  const TOTAL_BUDGET_MS = 4800;
+
+  try {
+    const encodedQuery = encodeURIComponent(searchTerm).replace(/%20/g, '+');
+    const searchUrl = `https://music.163.com/api/search/get?s=${encodedQuery}&type=1&limit=5`;
+    const searchData = await fetchNeteaseJson(searchUrl, 2600);
+
+    const songs: any[] = searchData?.result?.songs;
+    if (!Array.isArray(songs) || songs.length === 0) {
+      return res.status(200).json({ songId, lrc: null, notFound: true });
+    }
+
+    let bestSong = songs.find((s) => s && s.id) || songs[0];
+    if (targetDuration > 0) {
+      let minDiff = Infinity;
+      for (const cand of songs) {
+        if (!cand?.id) continue;
+        const rawDur = Number(cand.duration ?? cand.dt ?? 0);
+        const candSec = rawDur > 1000 ? rawDur / 1000 : rawDur;
+        const diff = candSec > 0 ? Math.abs(candSec - targetDuration) : Infinity;
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestSong = cand;
+        }
+      }
+    }
+
+    if (!bestSong?.id) {
+      return res.status(200).json({ songId, lrc: null, notFound: true });
+    }
+
+    const remainingMs = Math.max(1000, TOTAL_BUDGET_MS - (Date.now() - startTime));
+    const lyricUrl = `https://music.163.com/api/song/lyric?id=${encodeURIComponent(String(bestSong.id))}&lv=1`;
+    const lyricData = await fetchNeteaseJson(lyricUrl, remainingMs);
+
+    const rawLyric = typeof lyricData?.lrc?.lyric === 'string' ? lyricData.lrc.lyric.trim() : '';
+    if (!rawLyric || lyricData?.nolyric === true || lyricData?.uncollected === true) {
+      return res.status(200).json({ songId, lrc: null, notFound: true });
+    }
+
+    // Save in existing server lyricsCache so subsequent /api/lyrics requests for this song hit cache
+    const cacheKey = songId || `${title}-${artist}`;
+    if (cacheKey) {
+      const synced = parseLRC(rawLyric);
+      const cachedPayload: LyricsData = {
+        songId,
+        provider: 'netease',
+        syncedLyrics: synced.length > 0 ? synced : null,
+        plainLyrics:
+          synced.length > 0
+            ? synced.map((l) => l.text).filter(Boolean).join('\n') || null
+            : rawLyric,
+        notFound: false,
+        attribution: 'Source: Netease'
+      };
+      lyricsCache.set(cacheKey, {
+        data: cachedPayload,
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+      });
+    }
+
+    return res.status(200).json({
+      songId,
+      neteaseId: bestSong.id,
+      lrc: rawLyric,
+      notFound: false
+    });
+  } catch {
+    return res.status(200).json({ songId, lrc: null, notFound: true });
+  }
+});
+
 // YouTube Playlist Import Endpoint
 app.get('/api/playlist', async (req: Request, res: Response) => {
   const urlOrId = (req.query.url as string || req.query.id as string || '').trim();

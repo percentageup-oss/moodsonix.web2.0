@@ -113,6 +113,12 @@ export const LyricsPanel: React.FC<LyricsPanelProps> = ({ currentSong, className
         ) : (
           <p className="text-sm text-[var(--text-muted)]">No lyrics available</p>
         )}
+
+        {(lyrics.provider === 'netease' || lyrics.provider === 'lyrics.ovh') && (
+          <p className="pt-4 text-[11px] font-mono text-[var(--text-muted)] text-center">
+            Source: {lyrics.provider === 'netease' ? 'Netease' : 'lyrics.ovh'}
+          </p>
+        )}
       </div>
     </div>
   );

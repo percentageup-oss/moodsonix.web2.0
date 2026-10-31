@@ -1,4 +1,14 @@
 import { Song, LyricsData, LyricLine, PlaylistInfo } from '../types/music';
+import { fetchLyricsFallbacks } from './lyricsFallbacks';
+
+interface LyricsCacheEntry {
+  data: LyricsData;
+  expiresAt: number;
+}
+
+const LYRICS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const LYRICS_NOT_FOUND_TTL_MS = 60 * 60 * 1000; // 1 hour
+const lyricsCache = new Map<string, LyricsCacheEntry>();
 
 // Public fallback endpoints with CORS support
 const PIPED_INSTANCES = [
@@ -311,12 +321,18 @@ export async function searchMusic(
   };
 }
 
-// Resilient Lyrics fetcher (checks server API, then falls back directly to LRCLIB)
+// Resilient Lyrics fetcher (checks cache -> existing LRCLIB -> extra fallbacks if LRCLIB finds nothing)
 export async function fetchLyrics(
   song: Song,
   signal?: AbortSignal
 ): Promise<LyricsData> {
-  // 1. Try local server API
+  const cacheKey = song.id || `${song.title}-${song.artist}`;
+  const cached = lyricsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
+  // 1. Try local server API (LRCLIB)
   try {
     const params = new URLSearchParams({
       id: song.id,
@@ -328,6 +344,7 @@ export async function fetchLyrics(
     const res = await fetch(`/api/lyrics?${params.toString()}`, { signal });
     const { data, isJson } = await safeJsonResponse<LyricsData>(res);
     if (res.ok && isJson && data && !data.notFound) {
+      lyricsCache.set(cacheKey, { data, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
       return data;
     }
   } catch (err: any) {
@@ -351,7 +368,7 @@ export async function fetchLyrics(
     const { data, isJson } = await safeJsonResponse<any>(lrclibRes);
 
     if (isJson && data && (data.syncedLyrics || data.plainLyrics)) {
-      return {
+      const lrclibPayload: LyricsData = {
         songId: song.id,
         provider: 'lrclib',
         syncedLyrics: data.syncedLyrics ? parseLRC(data.syncedLyrics) : null,
@@ -359,6 +376,8 @@ export async function fetchLyrics(
         notFound: false,
         attribution: 'Lyrics from LRCLIB'
       };
+      lyricsCache.set(cacheKey, { data: lrclibPayload, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
+      return lrclibPayload;
     }
 
     // Try LRCLIB search endpoint
@@ -369,7 +388,7 @@ export async function fetchLyrics(
     if (searchData.isJson && Array.isArray(searchData.data) && searchData.data.length > 0) {
       const best = searchData.data[0];
       if (best && (best.syncedLyrics || best.plainLyrics)) {
-        return {
+        const lrclibSearchPayload: LyricsData = {
           songId: song.id,
           provider: 'lrclib',
           syncedLyrics: best.syncedLyrics ? parseLRC(best.syncedLyrics) : null,
@@ -377,13 +396,26 @@ export async function fetchLyrics(
           notFound: false,
           attribution: 'Lyrics from LRCLIB'
         };
+        lyricsCache.set(cacheKey, { data: lrclibSearchPayload, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
+        return lrclibSearchPayload;
       }
     }
   } catch (err: any) {
     if (err.name === 'AbortError') throw err;
   }
 
-  return {
+  // 3. Extra fallback sources (Netease -> lyrics.ovh), called ONLY when LRCLIB returned no lyrics
+  try {
+    const fallbackResult = await fetchLyricsFallbacks(song, signal);
+    if (fallbackResult && !fallbackResult.notFound) {
+      lyricsCache.set(cacheKey, { data: fallbackResult, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
+      return fallbackResult;
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+  }
+
+  const notFoundResult: LyricsData = {
     songId: song.id,
     provider: 'none',
     syncedLyrics: null,
@@ -391,6 +423,8 @@ export async function fetchLyrics(
     notFound: true,
     attribution: ''
   };
+  lyricsCache.set(cacheKey, { data: notFoundResult, expiresAt: Date.now() + LYRICS_NOT_FOUND_TTL_MS });
+  return notFoundResult;
 }
 
 // Resilient Playlist Importer (checks server API, then falls back to Piped)
