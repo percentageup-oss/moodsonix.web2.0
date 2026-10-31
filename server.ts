@@ -1,8 +1,18 @@
 import express, { Request, Response } from 'express';
-import { Innertube, UniversalCache } from 'youtubei.js';
+import { Innertube, UniversalCache, Log, Parser } from 'youtubei.js';
 import { GoogleGenAI } from '@google/genai';
 import path from 'path';
 import { Song, LyricsData, LyricLine, PlaylistInfo } from './src/types/music';
+
+// Silence YouTube.js decipher warnings and unmapped parser view errors (ListView, ListItemView, etc.)
+try {
+  Parser.setParserErrorHandler((context: any) => {
+    if (context?.error_type === 'class_not_found' || context?.classname === 'ListView' || context?.classname === 'ListItemView') {
+      return;
+    }
+  });
+  Log.setLevel(Log.Level.ERROR);
+} catch {}
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -40,7 +50,8 @@ async function getInnertube(): Promise<Innertube> {
       console.log('[Moodsonix] Initializing YouTube.js client...');
       const yt = await Innertube.create({
         cache: new UniversalCache(false),
-        generate_session_locally: true
+        generate_session_locally: true,
+        retrieve_player: false
       });
       innertubeInstance = yt;
       console.log('[Moodsonix] YouTube.js initialized successfully.');
@@ -610,7 +621,10 @@ async function startServer() {
   if (isDev) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);

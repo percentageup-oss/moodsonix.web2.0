@@ -1,5 +1,14 @@
 import type { Request, Response } from 'express';
-import { Innertube, UniversalCache } from 'youtubei.js';
+import { Innertube, UniversalCache, Log, Parser } from 'youtubei.js';
+
+try {
+  Parser.setParserErrorHandler((context: any) => {
+    if (context?.error_type === 'class_not_found' || context?.classname === 'ListView' || context?.classname === 'ListItemView') {
+      return;
+    }
+  });
+  Log.setLevel(Log.Level.ERROR);
+} catch {}
 
 let innertubeInstance: Innertube | null = null;
 let innertubePromise: Promise<Innertube> | null = null;
@@ -12,7 +21,8 @@ async function getInnertube(): Promise<Innertube> {
     try {
       const yt = await Innertube.create({
         cache: new UniversalCache(false),
-        generate_session_locally: true
+        generate_session_locally: true,
+        retrieve_player: false
       });
       innertubeInstance = yt;
       return yt;
