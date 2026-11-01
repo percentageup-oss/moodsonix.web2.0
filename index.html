@@ -3,10 +3,63 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- Neutralize Vite HMR WebSocket in iFrame sandbox environments where HMR is disabled -->
+    <script>
+      (function() {
+        const OriginalWebSocket = window.WebSocket;
+        if (OriginalWebSocket) {
+          window.WebSocket = function(url, protocols) {
+            if (protocols === 'vite-hmr' || (typeof url === 'string' && (url.includes('vite') || url.includes('/@vite/')))) {
+              const dummy = new EventTarget();
+              dummy.binaryType = 'blob';
+              dummy.readyState = 1;
+              dummy.url = String(url);
+              dummy.protocol = 'vite-hmr';
+              dummy.extensions = '';
+              dummy.bufferedAmount = 0;
+              dummy.send = function() {};
+              dummy.close = function() {
+                dummy.readyState = 3;
+                dummy.dispatchEvent(new CloseEvent('close', { wasClean: true, code: 1000 }));
+              };
+              setTimeout(() => {
+                dummy.dispatchEvent(new Event('open'));
+              }, 10);
+              return dummy;
+            }
+            return new OriginalWebSocket(url, protocols);
+          };
+          window.WebSocket.prototype = OriginalWebSocket.prototype;
+          window.WebSocket.CONNECTING = 0;
+          window.WebSocket.OPEN = 1;
+          window.WebSocket.CLOSING = 2;
+          window.WebSocket.CLOSED = 3;
+        }
+
+        window.addEventListener('error', function(event) {
+          const msg = event?.message || event?.error?.message || '';
+          if (typeof msg === 'string' && (msg.includes('WebSocket') || msg.includes('vite') || msg.includes('@vite/client'))) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          const msg = String(event?.reason?.message || event?.reason || '');
+          if (msg.includes('WebSocket') || msg.includes('vite') || msg.includes('@vite/client')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+
     <title>Moodsonix</title>
-    <meta name="description" content="AI-Powered YouTube Music Player PWA with mood-based music discovery, synchronized LRCLIB lyrics, ambient sound mixer, Pomodoro focus timer, and custom themes." />
+    <meta name="description" content="AI-Powered YouTube Music Player PWA with artist profiles, mood-based music discovery, synchronized LRCLIB lyrics, ambient sound mixer, Pomodoro focus timer, and custom themes." />
     <meta property="og:title" content="Moodsonix" />
-    <meta property="og:description" content="AI-Powered YouTube Music Player PWA with mood-based music discovery, synchronized LRCLIB lyrics, ambient sound mixer, Pomodoro focus timer, and custom themes." />
+    <meta property="og:description" content="AI-Powered YouTube Music Player PWA with artist profiles, mood-based music discovery, synchronized LRCLIB lyrics, ambient sound mixer, Pomodoro focus timer, and custom themes." />
     <meta property="og:type" content="website" />
     
     <meta name="theme-color" content="#0A0A0F" />

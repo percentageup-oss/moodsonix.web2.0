@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { Song, PlaybackState, RepeatMode } from '../types/music';
 import { useQueue } from './QueueContext';
 import { ambientAudio } from '../services/ambientAudio';
+import { searchMusic } from '../services/musicApi';
 
 declare global {
   interface Window {
@@ -412,6 +413,44 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const playSong = useCallback((song: Song) => {
     hasUserInteractedRef.current = true;
     void ambientAudio.resumeContext();
+
+    // Check if song requires YouTube search resolution (e.g. from iTunes artist profile or queue)
+    if (song.id && song.id.startsWith('itunes_')) {
+      setCurrentSong(song);
+      currentSongRef.current = song;
+      setPlaybackState('buffering');
+      playbackStateRef.current = 'buffering';
+      
+      const query = `${song.artist} ${song.title}`.trim();
+      searchMusic(query)
+        .then(({ results }) => {
+          if (results && results.length > 0) {
+            const best = results[0];
+            const resolvedSong: Song = {
+              ...best,
+              title: song.title || best.title,
+              artist: song.artist || best.artist,
+              album: song.album || best.album,
+              thumbnail: song.thumbnail || best.thumbnail
+            };
+            playSong(resolvedSong);
+          } else if (song.audioUrl) {
+            playSong({ ...song, source: 'audio', isPlayable: true });
+          } else {
+            setPlayerError('Could not find matching YouTube audio for this track');
+            setPlaybackState('paused');
+          }
+        })
+        .catch(() => {
+          if (song.audioUrl) {
+            playSong({ ...song, source: 'audio', isPlayable: true });
+          } else {
+            setPlayerError('Could not resolve YouTube audio');
+            setPlaybackState('paused');
+          }
+        });
+      return;
+    }
 
     setCurrentSong(song);
     currentSongRef.current = song;

@@ -21,6 +21,8 @@ import { SearchPage } from '../../pages/SearchPage';
 import { QueuePage } from '../../pages/QueuePage';
 import { LikedSongsPage } from '../../pages/LikedSongsPage';
 import { AccountPage } from '../../pages/AccountPage';
+import { ArtistPage } from '../../pages/ArtistPage';
+import { ItunesArtist } from '../../types/artist';
 
 import { Sliders, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -28,6 +30,7 @@ import { cn } from '../../lib/utils';
 export const AppShell: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<string>('home');
   const [searchInitialQuery, setSearchInitialQuery] = useState<string>('');
+  const [selectedArtist, setSelectedArtist] = useState<ItunesArtist | null>(null);
 
   // Modals state
   const [isToolsOpen, setIsToolsOpen] = useState(false);
@@ -161,7 +164,7 @@ export const AppShell: React.FC = () => {
       {/* Desktop Sidebar (Fixed 240px) */}
       <div className="hidden md:block shrink-0">
         <DesktopSidebar
-          currentPage={currentPage}
+          currentPage={currentPage === 'artist' ? 'search' : currentPage}
           onNavigate={handleNavigate}
           onOpenTools={() => setIsToolsOpen(true)}
           onOpenPlaylistImporter={() => setIsPlaylistImporterOpen(true)}
@@ -215,6 +218,20 @@ export const AppShell: React.FC = () => {
             <SearchPage
               initialQuery={searchInitialQuery}
               onShareSong={handleShareSong}
+              onSelectArtist={(artist) => {
+                setSelectedArtist(artist);
+                setCurrentPage('artist');
+              }}
+            />
+          )}
+
+          {currentPage === 'artist' && selectedArtist && (
+            <ArtistPage
+              artistId={selectedArtist.artistId}
+              initialArtistName={selectedArtist.artistName}
+              initialGenre={selectedArtist.primaryGenreName}
+              onBack={() => setCurrentPage('search')}
+              onShareSong={handleShareSong}
             />
           )}
 
@@ -254,7 +271,10 @@ export const AppShell: React.FC = () => {
         <PlayerBar />
 
         {/* Mobile Navigation Bar */}
-        <MobileNav currentPage={currentPage} onNavigate={handleNavigate} />
+        <MobileNav
+          currentPage={currentPage === 'artist' ? 'search' : currentPage}
+          onNavigate={handleNavigate}
+        />
       </div>
 
       {/* Modals & Overlays */}

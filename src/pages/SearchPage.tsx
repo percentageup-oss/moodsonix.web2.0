@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Song } from '../types/music';
+import { ItunesArtist } from '../types/artist';
 import { searchMusic } from '../services/musicApi';
+import { searchArtists } from '../services/itunesApi';
 import { useUser } from '../context/UserContext';
 import { SongRow } from '../components/music/SongRow';
 import { SongCard } from '../components/music/SongCard';
+import { ArtistRoundCard } from '../components/music/ArtistRoundCard';
 import {
   Search,
   Sparkles,
@@ -13,16 +16,22 @@ import {
   List,
   Music2,
   RefreshCw,
-  X
+  X,
+  Users
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface SearchPageProps {
   initialQuery?: string;
   onShareSong: (song: Song) => void;
+  onSelectArtist?: (artist: ItunesArtist) => void;
 }
 
-export const SearchPage: React.FC<SearchPageProps> = ({ initialQuery = '', onShareSong }) => {
+export const SearchPage: React.FC<SearchPageProps> = ({
+  initialQuery = '',
+  onShareSong,
+  onSelectArtist
+}) => {
   const { incrementSearchCount, isLimitReached, setShowAuthModal } = useUser();
 
   const [query, setQuery] = useState(initialQuery);
@@ -33,12 +42,75 @@ export const SearchPage: React.FC<SearchPageProps> = ({ initialQuery = '', onSha
   const [isMoodMode, setIsMoodMode] = useState(false);
   const [generatedMoodQuery, setGeneratedMoodQuery] = useState<string | null>(null);
 
+  // iTunes Artist Search State
+  const [artists, setArtists] = useState<ItunesArtist[]>([]);
+  const [isLoadingArtists, setIsLoadingArtists] = useState(false);
+  const [artistError, setArtistError] = useState<string | null>(null);
+
   const abortControllerRef = useRef<AbortController | null>(null);
+  const artistAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Search Artists directly via iTunes browser API
+  const executeArtistSearch = async (searchTerm: string) => {
+    const trimmed = searchTerm.trim();
+    if (!trimmed || isMoodMode) {
+      setArtists([]);
+      setIsLoadingArtists(false);
+      setArtistError(null);
+      return;
+    }
+
+    if (artistAbortControllerRef.current) {
+      artistAbortControllerRef.current.abort();
+    }
+    artistAbortControllerRef.current = new AbortController();
+
+    setIsLoadingArtists(true);
+    setArtistError(null);
+
+    try {
+      const { artists: foundArtists, error: itunesErr } = await searchArtists(
+        trimmed,
+        artistAbortControllerRef.current.signal
+      );
+
+      if (itunesErr) {
+        setArtistError(itunesErr);
+        setArtists([]);
+      } else {
+        setArtists(foundArtists || []);
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setArtistError('Unable to load artists at the moment.');
+        setArtists([]);
+      }
+    } finally {
+      setIsLoadingArtists(false);
+    }
+  };
+
+  // Debounced artist search as user types
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed || isMoodMode) {
+      setArtists([]);
+      setIsLoadingArtists(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      executeArtistSearch(trimmed);
+    }, 320);
+
+    return () => clearTimeout(timer);
+  }, [query, isMoodMode]);
 
   const executeSearch = async (searchQuery: string, useMood = isMoodMode) => {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
       setResults([]);
+      setArtists([]);
       setIsLoading(false);
       return;
     }
@@ -49,6 +121,9 @@ export const SearchPage: React.FC<SearchPageProps> = ({ initialQuery = '', onSha
       setIsLoading(false);
       return;
     }
+
+    // Trigger artist search alongside track search
+    executeArtistSearch(trimmed);
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -93,17 +168,19 @@ export const SearchPage: React.FC<SearchPageProps> = ({ initialQuery = '', onSha
   const handleClear = () => {
     setQuery('');
     setResults([]);
+    setArtists([]);
     setError(null);
+    setArtistError(null);
     setGeneratedMoodQuery(null);
   };
 
   const quickPills = [
+    'Taylor Swift',
+    'Coldplay',
+    'The Weeknd',
     'Lofi study beats',
     'Synthwave night drive',
-    'Workout phonk',
-    'Peaceful acoustic morning',
-    'Japanese city pop',
-    'Hans Zimmer orchestral'
+    'Hans Zimmer'
   ];
 
   return (
@@ -116,7 +193,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({ initialQuery = '', onSha
               // SEARCH ENGINE
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] mt-0.5">
-              Explore YouTube Music
+              Explore YouTube Music & Artists
             </h1>
           </div>
 
@@ -253,6 +330,65 @@ export const SearchPage: React.FC<SearchPageProps> = ({ initialQuery = '', onSha
           </button>
         </div>
       )}
+
+      {/* ---------------------------------------------------- */}
+      {/* ARTISTS SECTION (Direct iTunes Browser Search)       */}
+      {/* ---------------------------------------------------- */}
+      {(isLoadingArtists || artists.length > 0 || (artistError && query.trim())) && (
+        <div className="p-4 rounded-3xl bg-[var(--surface)] border border-[var(--border-color)] space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-[var(--accent)]" />
+              <h2 className="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--accent)]">
+                // ARTISTS
+              </h2>
+            </div>
+            {artists.length > 0 && (
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                Tap card to explore profile
+              </span>
+            )}
+          </div>
+
+          {/* Skeleton Loaders for Artists */}
+          {isLoadingArtists && (
+            <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-none">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-2 w-24 sm:w-28 shrink-0 animate-pulse">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[var(--surface-secondary)] border border-[var(--border-color)]" />
+                  <div className="h-3 w-16 bg-[var(--surface-secondary)] rounded" />
+                  <div className="h-2 w-10 bg-[var(--surface-secondary)] rounded" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Error Message for Artists (Safe & friendly, doesn't crash) */}
+          {!isLoadingArtists && artistError && (
+            <div className="py-2 px-3 rounded-xl bg-[var(--surface-secondary)] text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>{artistError}</span>
+            </div>
+          )}
+
+          {/* Found Artist Cards */}
+          {!isLoadingArtists && artists.length > 0 && (
+            <div className="flex items-start gap-2 sm:gap-4 overflow-x-auto pb-1 scrollbar-none">
+              {artists.map((artist) => (
+                <ArtistRoundCard
+                  key={artist.artistId}
+                  artist={artist}
+                  onClick={(a) => onSelectArtist?.(a)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* TRACKS RESULTS SECTION                               */}
+      {/* ---------------------------------------------------- */}
 
       {/* Loading Skeletons */}
       {isLoading && (
