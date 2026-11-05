@@ -3,7 +3,7 @@ import { Song } from '../../types/music';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
 import { formatTime, cn } from '../../lib/utils';
-import { Play, Pause, Heart, ListPlus, Share2, MoreVertical, Disc } from 'lucide-react';
+import { Play, Pause, Heart, ListPlus, Share2, MoreVertical, Disc, Loader2 } from 'lucide-react';
 import { MiniVisualizer } from './MiniVisualizer';
 
 interface SongRowProps {
@@ -13,7 +13,7 @@ interface SongRowProps {
 }
 
 export const SongRow: React.FC<SongRowProps> = ({ song, index, onShare }) => {
-  const { currentSong, isPlaying, playSong, togglePlay } = usePlayer();
+  const { currentSong, isPlaying, isLoading, playSong, togglePlay } = usePlayer();
   const { addToQueue, playNext, toggleLike, isLiked } = useQueue();
   const [showMenu, setShowMenu] = useState(false);
 
@@ -44,7 +44,15 @@ export const SongRow: React.FC<SongRowProps> = ({ song, index, onShare }) => {
       <div className="flex items-center gap-3 min-w-0">
         {typeof index === 'number' && (
           <div className="w-5 text-center text-xs font-mono text-[var(--text-muted)] group-hover:hidden">
-            {isCurrent ? <MiniVisualizer isPlaying={isPlaying} /> : (index + 1)}
+            {isCurrent ? (
+              isLoading ? (
+                <Loader2 className="w-3.5 h-3.5 text-[var(--accent)] animate-spin mx-auto" />
+              ) : (
+                <MiniVisualizer isPlaying={isPlaying} />
+              )
+            ) : (
+              index + 1
+            )}
           </div>
         )}
 
@@ -64,7 +72,9 @@ export const SongRow: React.FC<SongRowProps> = ({ song, index, onShare }) => {
               isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
             )}
           >
-            {isSongPlaying ? (
+            {isCurrent && isLoading ? (
+              <Loader2 className="w-5 h-5 text-[var(--accent)] animate-spin" />
+            ) : isSongPlaying ? (
               <Pause className="w-5 h-5 text-[var(--accent)] fill-[var(--accent)]" />
             ) : (
               <Play className="w-5 h-5 text-white fill-white ml-0.5" />

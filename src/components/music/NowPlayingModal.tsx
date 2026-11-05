@@ -18,7 +18,8 @@ import {
   ListMusic,
   FileText,
   Sliders,
-  Tv
+  Tv,
+  Loader2
 } from 'lucide-react';
 import { LyricsPanel } from './LyricsPanel';
 import { QualityMenu } from './QualityMenu';
@@ -35,6 +36,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
   const {
     currentSong,
     isPlaying,
+    isLoading,
     currentTime,
     duration,
     volume,
@@ -225,9 +227,12 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
               <button
                 onClick={togglePlay}
                 className="w-16 h-16 rounded-full bg-[var(--accent)] text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all glow-accent"
-                title={isPlaying ? 'Pause' : 'Play'}
+                title={isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
+                aria-label={isLoading ? 'Loading song' : isPlaying ? 'Pause song' : 'Play song'}
               >
-                {isPlaying ? (
+                {isLoading ? (
+                  <Loader2 className="w-7 h-7 animate-spin text-black" />
+                ) : isPlaying ? (
                   <Pause className="w-7 h-7 fill-current" />
                 ) : (
                   <Play className="w-7 h-7 fill-current ml-1" />

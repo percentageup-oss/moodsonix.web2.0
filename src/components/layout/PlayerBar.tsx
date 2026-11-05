@@ -19,7 +19,9 @@ import {
   Maximize2,
   AlertCircle,
   Tv,
-  X
+  X,
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { QualityMenu } from '../music/QualityMenu';
 import { MiniVisualizer } from '../music/MiniVisualizer';
@@ -28,6 +30,10 @@ export const PlayerBar: React.FC = () => {
   const {
     currentSong,
     isPlaying,
+    isLoading,
+    connectionError,
+    retryCurrentSong,
+    clearConnectionError,
     currentTime,
     duration,
     volume,
@@ -60,6 +66,24 @@ export const PlayerBar: React.FC = () => {
 
   return (
     <>
+      {/* Connection Error Banner with Retry button */}
+      {connectionError && (
+        <div className="fixed bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-xl bg-[var(--surface-elevated)] border border-[var(--accent)] text-xs shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <AlertCircle className="w-4 h-4 shrink-0 text-[var(--accent)]" />
+          <span className="font-medium text-[var(--text-primary)]">{connectionError}</span>
+          <button
+            onClick={retryCurrentSong}
+            className="px-2.5 py-1 rounded-lg bg-[var(--accent)] text-black font-semibold hover:bg-[var(--accent-hover)] transition-colors active:scale-95 flex items-center gap-1.5 cursor-pointer ml-1"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </button>
+          <button onClick={clearConnectionError} className="p-1 ml-1 text-[var(--text-muted)] hover:text-white transition-colors">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Player Error Banner if video blocked */}
       {playerError && (
         <div className="fixed bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/90 text-white text-xs shadow-xl backdrop-blur-md">
@@ -129,8 +153,12 @@ export const PlayerBar: React.FC = () => {
             <button
               onClick={togglePlay}
               className="w-9 h-9 rounded-full bg-[var(--accent)] text-black flex items-center justify-center shadow-md active:scale-95"
+              title={isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
+              aria-label={isLoading ? 'Loading song' : isPlaying ? 'Pause song' : 'Play song'}
             >
-              {isPlaying ? (
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-black" />
+              ) : isPlaying ? (
                 <Pause className="w-4 h-4 fill-current" />
               ) : (
                 <Play className="w-4 h-4 fill-current ml-0.5" />
@@ -216,9 +244,12 @@ export const PlayerBar: React.FC = () => {
               <button
                 onClick={togglePlay}
                 className="w-8 h-8 rounded-full bg-[var(--accent)] text-black flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all glow-accent-sm"
-                title={isPlaying ? 'Pause' : 'Play'}
+                title={isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
+                aria-label={isLoading ? 'Loading song' : isPlaying ? 'Pause song' : 'Play song'}
               >
-                {isPlaying ? (
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-black" />
+                ) : isPlaying ? (
                   <Pause className="w-4 h-4 fill-current" />
                 ) : (
                   <Play className="w-4 h-4 fill-current ml-0.5" />

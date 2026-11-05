@@ -321,101 +321,200 @@ export async function searchMusic(
   };
 }
 
-// Resilient Lyrics fetcher (checks cache -> existing LRCLIB -> extra fallbacks if LRCLIB finds nothing)
+export interface FetchLyricsResult {
+  status: 'success' | 'notFound' | 'networkError';
+  data?: LyricsData;
+}
+
+// Resilient Lyrics fetcher with precise state reporting
+export async function fetchLyricsWithStatus(
+  song: Song,
+  signal?: AbortSignal
+): Promise<FetchLyricsResult> {
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  // Check if device is offline
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return { status: 'networkError' };
+  }
+
+  const cacheKey = song.id || `${song.title}-${song.artist}`;
+  const cached = lyricsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    if (cached.data.notFound) {
+      return { status: 'notFound' };
+    }
+    return { status: 'success', data: cached.data };
+  }
+
+  // 10 second timeout for this lyrics request attempt
+  const timeoutController = new AbortController();
+  const timeoutTimer = setTimeout(() => {
+    timeoutController.abort(new DOMException('TimeoutError', 'TimeoutError'));
+  }, 10000);
+
+  const onParentAbort = () => {
+    timeoutController.abort(signal?.reason || new DOMException('Aborted', 'AbortError'));
+  };
+  if (signal) {
+    signal.addEventListener('abort', onParentAbort, { once: true });
+  }
+
+  let hasAnySourceAnsweredNotFound = false;
+
+  try {
+    // 1. Try local server API (LRCLIB)
+    try {
+      const params = new URLSearchParams({
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        duration: (song.duration || 0).toString()
+      });
+
+      const res = await fetch(`/api/lyrics?${params.toString()}`, { signal: timeoutController.signal });
+      if (res.status === 404) {
+        hasAnySourceAnsweredNotFound = true;
+      } else if (res.status >= 500) {
+        // 5xx server error
+      } else if (res.ok) {
+        const { data, isJson } = await safeJsonResponse<LyricsData>(res);
+        if (isJson && data) {
+          if (!data.notFound && (data.syncedLyrics || data.plainLyrics)) {
+            lyricsCache.set(cacheKey, { data, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
+            return { status: 'success', data };
+          } else if (data.notFound) {
+            hasAnySourceAnsweredNotFound = true;
+          }
+        }
+      }
+    } catch (err: any) {
+      if (signal?.aborted) throw err;
+    }
+
+    // 2. Direct client-side LRCLIB call
+    const { title: cleanTitle, artistHint } = cleanTitleForLyrics(song.title);
+    const searchArtist = song.artist || artistHint || '';
+
+    try {
+      const getParams = new URLSearchParams({
+        track_name: cleanTitle,
+        artist_name: searchArtist
+      });
+      if (song.duration && song.duration > 0) {
+        getParams.append('duration', song.duration.toString());
+      }
+
+      const lrclibRes = await fetch(`https://lrclib.net/api/get?${getParams.toString()}`, {
+        signal: timeoutController.signal
+      });
+      if (lrclibRes.status === 404) {
+        hasAnySourceAnsweredNotFound = true;
+      } else if (lrclibRes.status >= 500) {
+        // 5xx server error
+      } else if (lrclibRes.ok) {
+        const { data, isJson } = await safeJsonResponse<any>(lrclibRes);
+        if (isJson && data && (data.syncedLyrics || data.plainLyrics)) {
+          const lrclibPayload: LyricsData = {
+            songId: song.id,
+            provider: 'lrclib',
+            syncedLyrics: data.syncedLyrics ? parseLRC(data.syncedLyrics) : null,
+            plainLyrics: data.plainLyrics || null,
+            notFound: false,
+            attribution: 'Lyrics from LRCLIB'
+          };
+          lyricsCache.set(cacheKey, { data: lrclibPayload, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
+          return { status: 'success', data: lrclibPayload };
+        }
+      }
+
+      // Try LRCLIB search endpoint
+      const query = `${cleanTitle} ${searchArtist}`.trim();
+      const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`, {
+        signal: timeoutController.signal
+      });
+      if (searchRes.status === 404) {
+        hasAnySourceAnsweredNotFound = true;
+      } else if (searchRes.status >= 500) {
+        // 5xx server error
+      } else if (searchRes.ok) {
+        const searchData = await safeJsonResponse<any>(searchRes);
+        if (searchData.isJson && Array.isArray(searchData.data)) {
+          if (searchData.data.length === 0) {
+            hasAnySourceAnsweredNotFound = true;
+          } else {
+            const best = searchData.data[0];
+            if (best && (best.syncedLyrics || best.plainLyrics)) {
+              const lrclibSearchPayload: LyricsData = {
+                songId: song.id,
+                provider: 'lrclib',
+                syncedLyrics: best.syncedLyrics ? parseLRC(best.syncedLyrics) : null,
+                plainLyrics: best.plainLyrics || null,
+                notFound: false,
+                attribution: 'Lyrics from LRCLIB'
+              };
+              lyricsCache.set(cacheKey, { data: lrclibSearchPayload, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
+              return { status: 'success', data: lrclibSearchPayload };
+            } else {
+              hasAnySourceAnsweredNotFound = true;
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      if (signal?.aborted) throw err;
+    }
+
+    // 3. Extra fallback sources (Netease -> lyrics.ovh)
+    try {
+      const fallbackResult = await fetchLyricsFallbacks(song, timeoutController.signal);
+      if (fallbackResult.data && !fallbackResult.data.notFound) {
+        lyricsCache.set(cacheKey, { data: fallbackResult.data, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
+        return { status: 'success', data: fallbackResult.data };
+      }
+      if (fallbackResult.hasAnySourceAnsweredNotFound) {
+        hasAnySourceAnsweredNotFound = true;
+      }
+    } catch (err: any) {
+      if (signal?.aborted) throw err;
+    }
+
+    // 4. Decision: notFound if ANY source answered not found, otherwise networkError
+    if (hasAnySourceAnsweredNotFound) {
+      const notFoundResult: LyricsData = {
+        songId: song.id,
+        provider: 'none',
+        syncedLyrics: null,
+        plainLyrics: null,
+        notFound: true,
+        attribution: ''
+      };
+      lyricsCache.set(cacheKey, { data: notFoundResult, expiresAt: Date.now() + LYRICS_NOT_FOUND_TTL_MS });
+      return { status: 'notFound' };
+    }
+
+    // All sources failed due to network / timeout / 5xx / offline
+    return { status: 'networkError' };
+  } finally {
+    clearTimeout(timeoutTimer);
+    if (signal) {
+      signal.removeEventListener('abort', onParentAbort);
+    }
+  }
+}
+
+// Wrapper to preserve existing signature for consumers
 export async function fetchLyrics(
   song: Song,
   signal?: AbortSignal
 ): Promise<LyricsData> {
-  const cacheKey = song.id || `${song.title}-${song.artist}`;
-  const cached = lyricsCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.data;
+  const result = await fetchLyricsWithStatus(song, signal);
+  if (result.status === 'success' && result.data) {
+    return result.data;
   }
-
-  // 1. Try local server API (LRCLIB)
-  try {
-    const params = new URLSearchParams({
-      id: song.id,
-      title: song.title,
-      artist: song.artist,
-      duration: (song.duration || 0).toString()
-    });
-
-    const res = await fetch(`/api/lyrics?${params.toString()}`, { signal });
-    const { data, isJson } = await safeJsonResponse<LyricsData>(res);
-    if (res.ok && isJson && data && !data.notFound) {
-      lyricsCache.set(cacheKey, { data, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
-      return data;
-    }
-  } catch (err: any) {
-    if (err.name === 'AbortError') throw err;
-  }
-
-  // 2. Direct client-side LRCLIB call
-  const { title: cleanTitle, artistHint } = cleanTitleForLyrics(song.title);
-  const searchArtist = song.artist || artistHint || '';
-
-  try {
-    const getParams = new URLSearchParams({
-      track_name: cleanTitle,
-      artist_name: searchArtist
-    });
-    if (song.duration && song.duration > 0) {
-      getParams.append('duration', song.duration.toString());
-    }
-
-    const lrclibRes = await fetch(`https://lrclib.net/api/get?${getParams.toString()}`, { signal });
-    const { data, isJson } = await safeJsonResponse<any>(lrclibRes);
-
-    if (isJson && data && (data.syncedLyrics || data.plainLyrics)) {
-      const lrclibPayload: LyricsData = {
-        songId: song.id,
-        provider: 'lrclib',
-        syncedLyrics: data.syncedLyrics ? parseLRC(data.syncedLyrics) : null,
-        plainLyrics: data.plainLyrics || null,
-        notFound: false,
-        attribution: 'Lyrics from LRCLIB'
-      };
-      lyricsCache.set(cacheKey, { data: lrclibPayload, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
-      return lrclibPayload;
-    }
-
-    // Try LRCLIB search endpoint
-    const query = `${cleanTitle} ${searchArtist}`.trim();
-    const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`, { signal });
-    const searchData = await safeJsonResponse<any>(searchRes);
-
-    if (searchData.isJson && Array.isArray(searchData.data) && searchData.data.length > 0) {
-      const best = searchData.data[0];
-      if (best && (best.syncedLyrics || best.plainLyrics)) {
-        const lrclibSearchPayload: LyricsData = {
-          songId: song.id,
-          provider: 'lrclib',
-          syncedLyrics: best.syncedLyrics ? parseLRC(best.syncedLyrics) : null,
-          plainLyrics: best.plainLyrics || null,
-          notFound: false,
-          attribution: 'Lyrics from LRCLIB'
-        };
-        lyricsCache.set(cacheKey, { data: lrclibSearchPayload, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
-        return lrclibSearchPayload;
-      }
-    }
-  } catch (err: any) {
-    if (err.name === 'AbortError') throw err;
-  }
-
-  // 3. Extra fallback sources (Netease -> lyrics.ovh), called ONLY when LRCLIB returned no lyrics
-  try {
-    const fallbackResult = await fetchLyricsFallbacks(song, signal);
-    if (fallbackResult && !fallbackResult.notFound) {
-      lyricsCache.set(cacheKey, { data: fallbackResult, expiresAt: Date.now() + LYRICS_CACHE_TTL_MS });
-      return fallbackResult;
-    }
-  } catch (err: any) {
-    if (err.name === 'AbortError') throw err;
-  }
-
-  const notFoundResult: LyricsData = {
+  return {
     songId: song.id,
     provider: 'none',
     syncedLyrics: null,
@@ -423,8 +522,6 @@ export async function fetchLyrics(
     notFound: true,
     attribution: ''
   };
-  lyricsCache.set(cacheKey, { data: notFoundResult, expiresAt: Date.now() + LYRICS_NOT_FOUND_TTL_MS });
-  return notFoundResult;
 }
 
 // Resilient Playlist Importer (checks server API, then falls back to Piped)

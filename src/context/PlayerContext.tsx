@@ -27,6 +27,10 @@ interface PlayerContextType {
   isVideoOpen: boolean;
   setIsVideoOpen: (open: boolean) => void;
   toggleVideo: () => void;
+  isLoading: boolean;
+  connectionError: string | null;
+  retryCurrentSong: () => void;
+  clearConnectionError: () => void;
   cueSong: (song: Song) => void;
   playSong: (song: Song) => void;
   togglePlay: () => void;
@@ -109,6 +113,40 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
   const [playerError, setPlayerError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  // Loading timer & network refs
+  const isLoadingRef = useRef<boolean>(false);
+  const connectionErrorRef = useRef<string | null>(null);
+  const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearLoadingTimer = useCallback(() => {
+    if (loadingTimerRef.current) {
+      clearTimeout(loadingTimerRef.current);
+      loadingTimerRef.current = null;
+    }
+  }, []);
+
+  const startLoadingTimer = useCallback(() => {
+    clearLoadingTimer();
+    loadingTimerRef.current = setTimeout(() => {
+      if (playbackStateRef.current === 'playing') return;
+
+      // When offline, keep spinner active (banner shows "Waiting for connection...")
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setIsLoading(true);
+        isLoadingRef.current = true;
+        return;
+      }
+
+      setIsLoading(false);
+      isLoadingRef.current = false;
+      const errorMsg = 'No connection. Tap to retry';
+      setConnectionError(errorMsg);
+      connectionErrorRef.current = errorMsg;
+    }, 15000);
+  }, [clearLoadingTimer]);
 
   // Single persistent root <audio> element & single persistent YT.Player instance
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -414,6 +452,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     hasUserInteractedRef.current = true;
     void ambientAudio.resumeContext();
 
+    // 1. Set isLoading = true immediately when user taps a song, before any fetch or player call
+    setIsLoading(true);
+    isLoadingRef.current = true;
+    setConnectionError(null);
+    connectionErrorRef.current = null;
+    startLoadingTimer();
+
     // Check if song requires YouTube search resolution (e.g. from iTunes artist profile or queue)
     if (song.id && song.id.startsWith('itunes_')) {
       setCurrentSong(song);
@@ -437,17 +482,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           } else if (song.audioUrl) {
             playSong({ ...song, source: 'audio', isPlayable: true });
           } else {
+            // Rule 2: Never turn isLoading off in a fetch finally block or when a request fails
             setPlayerError('Could not find matching YouTube audio for this track');
-            setPlaybackState('paused');
           }
         })
         .catch(() => {
           if (song.audioUrl) {
             playSong({ ...song, source: 'audio', isPlayable: true });
-          } else {
-            setPlayerError('Could not resolve YouTube audio');
-            setPlaybackState('paused');
           }
+          // Rule 2: Never turn isLoading off in a fetch finally block or when a request fails
         });
       return;
     }
@@ -544,6 +587,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const song = currentSongRef.current;
     if (!song) return;
 
+    setIsLoading(true);
+    isLoadingRef.current = true;
+    setConnectionError(null);
+    connectionErrorRef.current = null;
+    startLoadingTimer();
+
     if (isDirectAudioSong(song) && song.audioUrl) {
       const audio = audioRef.current;
       if (audio) {
@@ -597,7 +646,26 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } else {
       playSong(song);
     }
-  }, [playSong]);
+  }, [playSong, startLoadingTimer]);
+
+  // Retry currently active / pending track on user tap or reconnect
+  const retryCurrentSong = useCallback(() => {
+    const song = currentSongRef.current;
+    if (song) {
+      setConnectionError(null);
+      connectionErrorRef.current = null;
+      setPlayerError(null);
+      setIsLoading(true);
+      isLoadingRef.current = true;
+      startLoadingTimer();
+      playSong(song);
+    }
+  }, [playSong, startLoadingTimer]);
+
+  const clearConnectionError = useCallback(() => {
+    setConnectionError(null);
+    connectionErrorRef.current = null;
+  }, []);
 
   // Next track (supports background track advancement without visibility blocking)
   const nextTrack = useCallback(() => {
@@ -648,7 +716,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     hasUserInteractedRef.current = true;
     void ambientAudio.resumeContext();
 
-    if (playbackStateRef.current === 'playing') {
+    if (connectionErrorRef.current && currentSongRef.current) {
+      retryCurrentSong();
+    } else if (playbackStateRef.current === 'playing') {
       pause();
     } else if (currentSongRef.current) {
       resume();
@@ -656,7 +726,35 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const next = consumeNextTrack();
       if (next) playSong(next);
     }
-  }, [pause, resume, queue, consumeNextTrack, playSong]);
+  }, [pause, resume, queue, consumeNextTrack, playSong, retryCurrentSong]);
+
+  // Listen to window offline and online events (auto-retry pending song on reconnect)
+  useEffect(() => {
+    const handleOffline = () => {
+      // If a song is waiting, keep the spinner active
+      if (isLoadingRef.current) {
+        setIsLoading(true);
+      }
+    };
+
+    const handleOnline = () => {
+      // When connection returns, retry the current song automatically if waiting or errored
+      if (
+        currentSongRef.current &&
+        (isLoadingRef.current || connectionErrorRef.current || playbackStateRef.current === 'buffering')
+      ) {
+        retryCurrentSong();
+      }
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [retryCurrentSong]);
 
   // Handle YouTube embedded player state changes (strictly mirror real player state)
   const handleYtStateChange = useCallback((event: any) => {
@@ -690,6 +788,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // -1: unstarted, 0: ended, 1: playing, 2: paused, 3: buffering, 5: cued
     if (stateCode === 1) {
+      clearLoadingTimer();
+      setIsLoading(false);
+      isLoadingRef.current = false;
+      setConnectionError(null);
+      connectionErrorRef.current = null;
       setIsSessionStopped(false);
       setPlaybackState('playing');
       playbackStateRef.current = 'playing';
@@ -698,7 +801,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setPlaybackState('paused');
       playbackStateRef.current = 'paused';
       syncPositionState(time, dur, rate);
-    } else if (stateCode === 3) {
+    } else if (stateCode === 3 || stateCode === -1) {
+      setIsLoading(true);
+      isLoadingRef.current = true;
+      startLoadingTimer();
       setPlaybackState('buffering');
       playbackStateRef.current = 'buffering';
     } else if (stateCode === 5) {
@@ -715,10 +821,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         nextTrack();
       }
     }
-  }, [nextTrack, resume, seekTo, syncPositionState]);
+  }, [nextTrack, resume, seekTo, syncPositionState, clearLoadingTimer, startLoadingTimer]);
 
   // Handle YouTube errors
   const handleYtError = useCallback((event: any) => {
+    clearLoadingTimer();
+    setIsLoading(false);
+    isLoadingRef.current = false;
+
     if (isDirectAudioSong(currentSongRef.current)) return;
 
     const code = event.data;
@@ -736,7 +846,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         nextTrackRef.current();
       }, 2500);
     }
-  }, []);
+  }, [clearLoadingTimer]);
 
   // Keep refs synchronized with latest callbacks and state
   useEffect(() => {
@@ -779,6 +889,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const handlePlaying = () => {
       if (!isDirectAudioSong(currentSongRef.current)) return;
+      clearLoadingTimer();
+      setIsLoading(false);
+      isLoadingRef.current = false;
+      setConnectionError(null);
+      connectionErrorRef.current = null;
       setIsSessionStopped(false);
       setPlaybackState('playing');
       playbackStateRef.current = 'playing';
@@ -786,6 +901,22 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const pos = audio.currentTime || 0;
       const rate = audio.playbackRate || 1;
       syncPositionState(pos, dur, rate);
+    };
+
+    const handleCanPlay = () => {
+      if (!isDirectAudioSong(currentSongRef.current)) return;
+      clearLoadingTimer();
+      setIsLoading(false);
+      isLoadingRef.current = false;
+      setConnectionError(null);
+      connectionErrorRef.current = null;
+    };
+
+    const handleLoadStart = () => {
+      if (!isDirectAudioSong(currentSongRef.current)) return;
+      setIsLoading(true);
+      isLoadingRef.current = true;
+      startLoadingTimer();
     };
 
     const handlePause = () => {
@@ -799,8 +930,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const handleWaiting = () => {
       if (!isDirectAudioSong(currentSongRef.current)) return;
+      setIsLoading(true);
+      isLoadingRef.current = true;
+      startLoadingTimer();
       setPlaybackState('buffering');
       playbackStateRef.current = 'buffering';
+    };
+
+    const handleStalled = () => {
+      if (!isDirectAudioSong(currentSongRef.current)) return;
+      setIsLoading(true);
+      isLoadingRef.current = true;
+      startLoadingTimer();
     };
 
     const handleLoadedMetadata = () => {
@@ -863,6 +1004,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const handleError = () => {
       if (!isDirectAudioSong(currentSongRef.current)) return;
+      clearLoadingTimer();
+      setIsLoading(false);
+      isLoadingRef.current = false;
       if (!audio.getAttribute('src')) return;
       setPlayerError('Audio stream could not be loaded.');
       setPlaybackState('paused');
@@ -870,8 +1014,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('loadstart', handleLoadStart);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('waiting', handleWaiting);
+    audio.addEventListener('stalled', handleStalled);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('durationchange', handleLoadedMetadata);
     audio.addEventListener('ratechange', handleRateChange);
@@ -882,8 +1029,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     return () => {
       audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('loadstart', handleLoadStart);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('waiting', handleWaiting);
+      audio.removeEventListener('stalled', handleStalled);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('durationchange', handleLoadedMetadata);
       audio.removeEventListener('ratechange', handleRateChange);
@@ -892,7 +1042,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [syncPositionState]);
+  }, [syncPositionState, clearLoadingTimer, startLoadingTimer]);
 
   // Initialize persistent YouTube IFrame Player ONCE (never destroy/recreate on song or route changes)
   useEffect(() => {
@@ -1158,6 +1308,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isVideoOpen,
         setIsVideoOpen: handleSetIsVideoOpen,
         toggleVideo,
+        isLoading,
+        connectionError,
+        retryCurrentSong,
+        clearConnectionError,
         cueSong,
         playSong,
         togglePlay,

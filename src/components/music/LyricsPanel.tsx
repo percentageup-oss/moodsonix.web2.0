@@ -3,7 +3,7 @@ import { Song } from '../../types/music';
 import { useLyrics } from '../../hooks/useLyrics';
 import { usePlayer } from '../../context/PlayerContext';
 import { cn } from '../../lib/utils';
-import { Music2, Loader2, Sparkles } from 'lucide-react';
+import { Music2, Loader2, Sparkles, WifiOff, RotateCcw } from 'lucide-react';
 
 interface LyricsPanelProps {
   currentSong: Song | null;
@@ -12,7 +12,7 @@ interface LyricsPanelProps {
 
 export const LyricsPanel: React.FC<LyricsPanelProps> = ({ currentSong, className }) => {
   const { currentTime, seekTo } = usePlayer();
-  const { lyrics, isLoading, error, activeLineIndex } = useLyrics(currentSong, currentTime);
+  const { lyrics, lyricsState, retryLyrics, activeLineIndex } = useLyrics(currentSong, currentTime);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeLineRef = useRef<HTMLParagraphElement>(null);
 
@@ -40,23 +40,41 @@ export const LyricsPanel: React.FC<LyricsPanelProps> = ({ currentSong, className
     );
   }
 
-  if (isLoading) {
+  // State 1: loading
+  if (lyricsState === 'loading') {
     return (
       <div className={cn('flex flex-col items-center justify-center h-full text-center p-6', className)}>
-        <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin mb-3" />
-        <p className="text-xs font-mono uppercase tracking-wider text-[var(--text-secondary)]">
-          // FINDING LYRICS
-        </p>
+        <Loader2 className="w-6 h-6 text-[var(--accent)] animate-spin mb-3" />
+        <p className="text-sm font-medium text-[var(--text-secondary)]">Loading lyrics...</p>
       </div>
     );
   }
 
-  if (error || !lyrics || lyrics.notFound) {
+  // State 4: networkError
+  if (lyricsState === 'networkError') {
+    return (
+      <div className={cn('flex flex-col items-center justify-center h-full text-center p-6', className)}>
+        <WifiOff className="w-10 h-10 mb-3 text-amber-400 stroke-[1.5]" />
+        <p className="text-sm font-medium text-[var(--text-secondary)] mb-4">
+          Couldn't load lyrics. Check your connection.
+        </p>
+        <button
+          onClick={retryLyrics}
+          className="px-5 py-2.5 min-h-[44px] rounded-xl bg-[var(--accent)] text-black font-semibold text-xs flex items-center gap-2 hover:bg-[var(--accent-hover)] active:scale-95 transition-all shadow-md cursor-pointer"
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span>Retry</span>
+        </button>
+      </div>
+    );
+  }
+
+  // State 3: notFound
+  if (lyricsState === 'notFound' || !lyrics || lyrics.notFound) {
     return (
       <div className={cn('flex flex-col items-center justify-center h-full text-center p-6 text-[var(--text-muted)]', className)}>
         <Music2 className="w-10 h-10 mb-3 opacity-30 stroke-[1.5]" />
-        <p className="text-sm font-medium text-[var(--text-secondary)]">No lyrics found</p>
-        <p className="text-xs mt-1 text-[var(--text-muted)]">Lyrics could not be found for this track</p>
+        <p className="text-sm font-medium text-[var(--text-secondary)]">Lyrics not available for this song</p>
       </div>
     );
   }

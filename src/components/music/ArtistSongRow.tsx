@@ -22,10 +22,9 @@ export const ArtistSongRow: React.FC<ArtistSongRowProps> = ({
   showIndexNumber = false,
   onShare
 }) => {
-  const { currentSong, isPlaying, playSong, togglePlay } = usePlayer();
+  const { currentSong, isPlaying, isLoading, playSong, togglePlay } = usePlayer();
   const { addToQueue, playNext, toggleLike, isLiked } = useQueue();
 
-  const [isResolving, setIsResolving] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
 
@@ -44,8 +43,8 @@ export const ArtistSongRow: React.FC<ArtistSongRowProps> = ({
   const isSongPlaying = isCurrent && isPlaying;
   const liked = isLiked(moodsonixSong.id) || (currentSong && isCurrent ? isLiked(currentSong.id) : false);
 
-  // Tap handler: search "{artist} {song title}" via YouTube search, take the best match, and play it
-  const handlePlay = async (e?: React.MouseEvent) => {
+  // Tap handler: immediately play song so isLoading is set before any fetch or player call
+  const handlePlay = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
     if (isCurrent) {
@@ -53,32 +52,7 @@ export const ArtistSongRow: React.FC<ArtistSongRowProps> = ({
       return;
     }
 
-    setIsResolving(true);
-    try {
-      const query = `${song.artistName} ${song.trackName}`.trim();
-      const { results } = await searchMusic(query);
-
-      if (results && results.length > 0) {
-        const bestMatch = results[0];
-        // Retain iTunes high quality album artwork & album name if available
-        const enhancedSong: Song = {
-          ...bestMatch,
-          title: song.trackName || bestMatch.title,
-          artist: song.artistName || bestMatch.artist,
-          album: song.collectionName || bestMatch.album,
-          thumbnail: upscaleArtwork(song.artworkUrl100) || bestMatch.thumbnail
-        };
-        playSong(enhancedSong);
-      } else {
-        // Fallback to playing the moodsonix song wrapper
-        playSong(moodsonixSong);
-      }
-    } catch (err) {
-      console.warn('Failed to resolve song on YouTube, playing fallback', err);
-      playSong(moodsonixSong);
-    } finally {
-      setIsResolving(false);
-    }
+    playSong(moodsonixSong);
   };
 
   // Long-press handling for mobile (500ms hold)
@@ -148,7 +122,15 @@ export const ArtistSongRow: React.FC<ArtistSongRowProps> = ({
       <div className="flex items-center gap-3 min-w-0">
         {showIndexNumber && typeof index === 'number' && (
           <div className="w-5 text-center text-xs font-mono font-bold text-[var(--text-muted)] group-hover:hidden">
-            {isCurrent ? <MiniVisualizer isPlaying={isPlaying} /> : (index + 1)}
+            {isCurrent ? (
+              isLoading ? (
+                <Loader2 className="w-3.5 h-3.5 text-[var(--accent)] animate-spin mx-auto" />
+              ) : (
+                <MiniVisualizer isPlaying={isPlaying} />
+              )
+            ) : (
+              index + 1
+            )}
           </div>
         )}
 
@@ -172,10 +154,10 @@ export const ArtistSongRow: React.FC<ArtistSongRowProps> = ({
           <div
             className={cn(
               'absolute inset-0 bg-black/45 flex items-center justify-center transition-opacity',
-              isCurrent || isResolving ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
             )}
           >
-            {isResolving ? (
+            {isCurrent && isLoading ? (
               <Loader2 className="w-5 h-5 text-[var(--accent)] animate-spin" />
             ) : isSongPlaying ? (
               <Pause className="w-5 h-5 text-[var(--accent)] fill-[var(--accent)]" />

@@ -3,7 +3,7 @@ import { Song } from '../../types/music';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
 import { formatTime, cn } from '../../lib/utils';
-import { Play, Pause, Heart, ListPlus } from 'lucide-react';
+import { Play, Pause, Heart, ListPlus, Loader2 } from 'lucide-react';
 
 interface SongCardProps {
   song: Song;
@@ -11,7 +11,7 @@ interface SongCardProps {
 }
 
 export const SongCard: React.FC<SongCardProps> = ({ song }) => {
-  const { currentSong, isPlaying, playSong, togglePlay } = usePlayer();
+  const { currentSong, isPlaying, isLoading, playSong, togglePlay } = usePlayer();
   const { addToQueue, toggleLike, isLiked } = useQueue();
 
   const isCurrent = currentSong?.id === song.id;
@@ -58,8 +58,11 @@ export const SongCard: React.FC<SongCardProps> = ({ song }) => {
               ? 'bg-[var(--accent)] text-black scale-100 opacity-100'
               : 'bg-[var(--accent)] text-black opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 hover:scale-105'
           )}
+          title={isCurrent && isLoading ? 'Loading...' : isSongPlaying ? 'Pause' : 'Play'}
         >
-          {isSongPlaying ? (
+          {isCurrent && isLoading ? (
+            <Loader2 className="w-5 h-5 text-black animate-spin" />
+          ) : isSongPlaying ? (
             <Pause className="w-5 h-5 fill-current" />
           ) : (
             <Play className="w-5 h-5 fill-current ml-0.5" />
