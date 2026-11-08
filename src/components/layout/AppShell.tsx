@@ -22,6 +22,7 @@ import { QueuePage } from '../../pages/QueuePage';
 import { LikedSongsPage } from '../../pages/LikedSongsPage';
 import { AccountPage } from '../../pages/AccountPage';
 import { ArtistPage } from '../../pages/ArtistPage';
+import { DataUsagePage } from '../../pages/DataUsagePage';
 import { ItunesArtist } from '../../types/artist';
 
 import { Sliders, Sparkles } from 'lucide-react';
@@ -253,7 +254,12 @@ export const AppShell: React.FC = () => {
             <AccountPage
               onOpenTools={() => setIsToolsOpen(true)}
               onOpenShortcuts={() => setIsShortcutsOpen(true)}
+              onNavigate={handleNavigate}
             />
+          )}
+
+          {currentPage === 'data-usage' && (
+            <DataUsagePage onNavigate={handleNavigate} />
           )}
         </main>
 
@@ -278,7 +284,11 @@ export const AppShell: React.FC = () => {
       </div>
 
       {/* Modals & Overlays */}
-      <ToolsSheet isOpen={isToolsOpen} onClose={() => setIsToolsOpen(false)} />
+      <ToolsSheet
+        isOpen={isToolsOpen}
+        onClose={() => setIsToolsOpen(false)}
+        onNavigate={handleNavigate}
+      />
       
       <PlaylistImporterModal
         isOpen={isPlaylistImporterOpen}

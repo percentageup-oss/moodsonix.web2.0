@@ -14,7 +14,8 @@ import {
   FolderInput,
   Sliders,
   LogOut,
-  LogIn
+  LogIn,
+  Activity
 } from 'lucide-react';
 import { PWAInstallButton } from '../common/PWAInstallButton';
 
@@ -41,6 +42,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     { id: 'search', label: 'Search', icon: Search },
     { id: 'queue', label: 'Queue', icon: ListMusic, badge: queue.length > 0 ? queue.length : undefined },
     { id: 'liked', label: 'Liked Songs', icon: Heart, badge: likedSongs.length > 0 ? likedSongs.length : undefined },
+    { id: 'data-usage', label: 'Data Usage', icon: Activity },
     { id: 'account', label: 'Account', icon: User }
   ];
 

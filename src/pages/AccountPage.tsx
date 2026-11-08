@@ -15,16 +15,18 @@ import {
   Sparkles,
   Download,
   Trash2,
-  CheckCircle2
+  CheckCircle2,
+  Activity
 } from 'lucide-react';
 import { PWAInstallButton } from '../components/common/PWAInstallButton';
 
 interface AccountPageProps {
   onOpenTools: () => void;
   onOpenShortcuts: () => void;
+  onNavigate?: (page: string) => void;
 }
 
-export const AccountPage: React.FC<AccountPageProps> = ({ onOpenTools, onOpenShortcuts }) => {
+export const AccountPage: React.FC<AccountPageProps> = ({ onOpenTools, onOpenShortcuts, onNavigate }) => {
   const { user, logout, setShowAuthModal, maxGuestSearches } = useUser();
   const { likedSongs, history, queue, clearQueue } = useQueue();
   const { theme, setTheme } = useTheme();
@@ -133,6 +135,22 @@ export const AccountPage: React.FC<AccountPageProps> = ({ onOpenTools, onOpenSho
         </span>
 
         <div className="space-y-2">
+          {/* Data Usage Telemetry */}
+          <div className="p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--border-color)] flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-semibold text-[var(--text-primary)]">Data Usage & Telemetry</h3>
+              <p className="text-[11px] text-[var(--text-muted)]">Track mobile data, Wi-Fi consumption, and quality stats</p>
+            </div>
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate('data-usage')}
+                className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-black font-semibold text-xs hover:bg-[var(--accent-hover)] transition-colors"
+              >
+                View Usage
+              </button>
+            )}
+          </div>
+
           {/* Quick theme change */}
           <div className="p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--border-color)] flex items-center justify-between">
             <div>

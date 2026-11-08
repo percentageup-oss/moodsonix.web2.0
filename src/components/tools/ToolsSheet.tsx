@@ -18,15 +18,17 @@ import {
   VolumeX,
   Bell,
   Sparkles,
-  Check
+  Check,
+  Activity
 } from 'lucide-react';
 
 interface ToolsSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  onNavigate?: (page: string) => void;
 }
 
-export const ToolsSheet: React.FC<ToolsSheetProps> = ({ isOpen, onClose }) => {
+export const ToolsSheet: React.FC<ToolsSheetProps> = ({ isOpen, onClose, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'focus' | 'ambient' | 'theme'>('focus');
   const { theme, setTheme } = useTheme();
 
@@ -442,6 +444,25 @@ export const ToolsSheet: React.FC<ToolsSheetProps> = ({ isOpen, onClose }) => {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Quick link to Data Usage Page */}
+        {onNavigate && (
+          <div className="pt-3 mt-3 border-t border-[var(--border-color)] shrink-0">
+            <button
+              onClick={() => {
+                onClose();
+                onNavigate('data-usage');
+              }}
+              className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-[var(--accent)]" />
+                <span className="font-semibold">Network & Data Usage</span>
+              </div>
+              <span className="text-[10px] font-mono text-[var(--accent)]">View metrics →</span>
+            </button>
           </div>
         )}
       </div>
