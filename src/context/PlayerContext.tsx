@@ -3,6 +3,7 @@ import { Song, PlaybackState, RepeatMode } from '../types/music';
 import { useQueue } from './QueueContext';
 import { ambientAudio } from '../services/ambientAudio';
 import { searchMusic } from '../services/musicApi';
+import { QUALITY_STORAGE_KEY, loadSavedQuality, resolveQuality } from '../lib/streamQuality';
 
 declare global {
   interface Window {
@@ -22,6 +23,8 @@ interface PlayerContextType {
   repeatMode: RepeatMode;
   isShuffled: boolean;
   quality: string;
+  /** The quality actually requested right now (after Auto / video-hidden / mobile-data rules). */
+  effectiveQuality: string;
   isNowPlayingOpen: boolean;
   setIsNowPlayingOpen: (open: boolean) => void;
   isVideoOpen: boolean;
@@ -103,7 +106,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [isShuffled, setIsShuffled] = useState<boolean>(false);
-  const [quality, setQualityState] = useState<string>('auto');
+  const [quality, setQualityState] = useState<string>(() => loadSavedQuality());
+  // Re-render when the connection type changes so "Auto" can switch between Wi-Fi and mobile-data behaviour
+  const [, setNetTick] = useState<number>(0);
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
   const [isVideoOpen, setIsVideoOpen] = useState<boolean>(() => {
     try {
@@ -302,15 +307,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
+  // YouTube ignores setPlaybackQuality() (removed from the IFrame API in Oct 2019), so quality is
+  // applied by sizing the player in VideoPlayerDock (see src/lib/streamQuality.ts).
   const setQuality = useCallback((q: string) => {
     setQualityState(q);
-    if (playerRef.current && isPlayerReady.current) {
-      try {
-        if (q !== 'auto') {
-          playerRef.current.setPlaybackQuality(q);
-        }
-      } catch {}
-    }
+    try {
+      localStorage.setItem(QUALITY_STORAGE_KEY, q);
+    } catch {}
   }, []);
 
   const cycleRepeatMode = useCallback(() => {
@@ -1044,6 +1047,42 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [syncPositionState, clearLoadingTimer, startLoadingTimer]);
 
+  // Quality actually requested: smallest video when the preview is hidden (music only),
+  // the chosen quality when it is showing, and a mobile-data-aware default for "Auto".
+  const videoVisible = isVideoOpen && !!currentSong;
+  const effectiveQuality = resolveQuality(quality, videoVisible);
+
+  // Watch for Wi-Fi <-> mobile data switches (Network Information API; Chrome/Android only)
+  useEffect(() => {
+    const conn = (navigator as any).connection;
+    if (!conn || typeof conn.addEventListener !== 'function') return;
+    const onChange = () => setNetTick((t) => t + 1);
+    conn.addEventListener('change', onChange);
+    return () => conn.removeEventListener('change', onChange);
+  }, []);
+
+  // When the user picks a new quality while a video preview is playing, reload the current video at the
+  // same position so the new player size (and therefore stream resolution) takes effect immediately.
+  const lastQualityRef = useRef<string>(quality);
+  useEffect(() => {
+    if (lastQualityRef.current === quality) return;
+    lastQualityRef.current = quality;
+
+    const song = currentSongRef.current;
+    const player = playerRef.current;
+    if (!videoVisible || !song || isDirectAudioSong(song) || !player || !isPlayerReady.current) return;
+    if (playbackStateRef.current !== 'playing' && playbackStateRef.current !== 'buffering') return;
+
+    // Wait one beat so the dock has been resized before YouTube picks the stream
+    const timer = setTimeout(() => {
+      try {
+        const pos = Number(player.getCurrentTime?.()) || currentTimeRef.current || 0;
+        player.loadVideoById({ videoId: song.id, startSeconds: pos });
+      } catch {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [quality, videoVisible]);
+
   // Initialize persistent YouTube IFrame Player ONCE (never destroy/recreate on song or route changes)
   useEffect(() => {
     let initialized = false;
@@ -1303,6 +1342,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         repeatMode,
         isShuffled,
         quality,
+        effectiveQuality,
         isNowPlayingOpen,
         setIsNowPlayingOpen,
         isVideoOpen,

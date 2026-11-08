@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { cn } from '../../lib/utils';
+import { getRenderSize } from '../../lib/streamQuality';
 import {
   Tv,
   Maximize2,
@@ -15,13 +16,40 @@ export const VideoPlayerDock: React.FC = () => {
     isPlaying,
     isVideoOpen,
     setIsVideoOpen,
-    setIsNowPlayingOpen
+    setIsNowPlayingOpen,
+    effectiveQuality
   } = usePlayer();
 
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Video preview is visible only when a song is loaded AND video toggle is on
   const isVisible = Boolean(currentSong && isVideoOpen);
+
+  // YouTube picks the stream resolution from the size the player is laid out at, so the player is
+  // always laid out at the size of the chosen quality and then scaled down with CSS to fit the dock.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const render = getRenderSize(effectiveQuality);
+  const [fit, setFit] = useState({ scale: 1, x: 0, y: 0 });
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const update = () => {
+      const boxW = el.clientWidth;
+      const boxH = el.clientHeight;
+      if (!boxW || !boxH) return;
+      const scale = Math.min(boxW / render.w, boxH / render.h);
+      setFit({
+        scale,
+        x: (boxW - render.w * scale) / 2,
+        y: (boxH - render.h * scale) / 2
+      });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [render.w, render.h, isVisible, isExpanded]);
 
   return (
     <div
@@ -98,8 +126,17 @@ export const VideoPlayerDock: React.FC = () => {
       )}
 
       {/* Actual YouTube Iframe Anchor: permanently mounted in the DOM */}
-      <div className="w-full flex-1 relative bg-black min-h-0">
-        <div id="youtube-player-iframe" className="w-full h-full" />
+      <div ref={boxRef} className="w-full h-full flex-1 relative bg-black min-h-0 overflow-hidden">
+        <div
+          style={{
+            width: render.w,
+            height: render.h,
+            transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.scale})`,
+            transformOrigin: 'top left'
+          }}
+        >
+          <div id="youtube-player-iframe" className="w-full h-full" />
+        </div>
       </div>
 
       {/* Docked bottom audio status badge when visible and not expanded */}

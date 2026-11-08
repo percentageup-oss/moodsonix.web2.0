@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { cn } from '../../lib/utils';
 import { Check, Settings, Info } from 'lucide-react';
+import { qualityLabel } from '../../lib/streamQuality';
 
 interface QualityMenuProps {
   className?: string;
@@ -9,17 +10,17 @@ interface QualityMenuProps {
 }
 
 const QUALITY_OPTIONS = [
-  { id: 'auto', label: 'Auto (Recommended)', hint: 'Adaptive to network speed', estData: 'Dynamic' },
-  { id: 'tiny', label: 'Data Saver (144p)', hint: 'Lowest data usage (~30MB/hr)', estData: 'Lowest' },
-  { id: 'small', label: 'Low (240p)', hint: 'Light stream (~50MB/hr)', estData: 'Low' },
-  { id: 'medium', label: 'Normal (360p)', hint: 'Standard quality (~100MB/hr)', estData: 'Medium' },
-  { id: 'large', label: 'High (480p)', hint: 'Clear audio & video (~180MB/hr)', estData: 'High' },
-  { id: 'hd720', label: 'HD (720p)', hint: 'Higher data (~350MB/hr)', estData: 'Very High' },
-  { id: 'hd1080', label: 'Full HD (1080p)', hint: 'Highest data (~600MB/hr)', estData: 'Maximum' }
+  { id: 'auto', label: 'Auto (Recommended)', hint: 'Light on mobile data, normal on Wi-Fi', estData: 'Dynamic' },
+  { id: 'tiny', label: 'Data Saver (144p)', hint: 'Lowest data usage', estData: 'Lowest' },
+  { id: 'small', label: 'Low (240p)', hint: 'Light stream', estData: 'Low' },
+  { id: 'medium', label: 'Normal (360p)', hint: 'Standard video quality', estData: 'Medium' },
+  { id: 'large', label: 'High (480p)', hint: 'Clearer video', estData: 'High' },
+  { id: 'hd720', label: 'HD (720p)', hint: 'High data use', estData: 'Very High' },
+  { id: 'hd1080', label: 'Full HD (1080p)', hint: 'Highest data use', estData: 'Maximum' }
 ];
 
 export const QualityMenu: React.FC<QualityMenuProps> = ({ className, onClose }) => {
-  const { quality, setQuality } = usePlayer();
+  const { quality, setQuality, effectiveQuality, isVideoOpen } = usePlayer();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
 
   return (
@@ -42,9 +43,15 @@ export const QualityMenu: React.FC<QualityMenuProps> = ({ className, onClose }) 
 
       {showDisclaimer && (
         <div className="p-2 mb-2.5 rounded-lg bg-[var(--surface)] text-[11px] text-[var(--text-secondary)] leading-relaxed border border-[var(--border-color)]">
-          Quality is requested via the official YouTube IFrame Player. Actual delivery depends on YouTube stream availability, device, and network throughput.
+          YouTube no longer lets apps pick a quality directly, so Moodsonix sets it by sizing the player. YouTube makes the final call and the audio bitrate is always chosen by YouTube. Quality mainly affects the video, so with the video preview off the smallest video is used to save data.
         </div>
       )}
+
+      <p className="px-1 pb-2 text-[11px] text-[var(--text-secondary)] leading-snug">
+        {isVideoOpen
+          ? `Requesting ${qualityLabel(effectiveQuality)} video`
+          : `Video preview is off, so ${qualityLabel(effectiveQuality)} (lowest) is used to save data`}
+      </p>
 
       <div className="space-y-1">
         {QUALITY_OPTIONS.map((opt) => {
