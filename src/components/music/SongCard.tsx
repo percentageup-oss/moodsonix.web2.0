@@ -4,6 +4,7 @@ import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
 import { formatTime, cn } from '../../lib/utils';
 import { Play, Pause, Heart, ListPlus, Loader2 } from 'lucide-react';
+import { ArtistLinks } from './ArtistLinks';
 
 interface SongCardProps {
   song: Song;
@@ -86,7 +87,7 @@ export const SongCard: React.FC<SongCardProps> = ({ song }) => {
           {song.title}
         </p>
         <p className="text-xs text-[var(--text-secondary)] truncate mt-1">
-          {song.artist}
+          <ArtistLinks artist={song.artist} className="truncate block" />
         </p>
       </div>
 

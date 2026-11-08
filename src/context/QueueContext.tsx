@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Song } from '../types/music';
+import { FollowedArtist } from '../types/artist';
 
 interface QueueContextType {
   queue: Song[];
   history: Song[];
   likedSongs: Song[];
+  followedArtists: FollowedArtist[];
   addToQueue: (song: Song) => void;
   playNext: (song: Song) => void;
   removeFromQueue: (index: number) => void;
@@ -13,6 +15,8 @@ interface QueueContextType {
   setQueueList: (songs: Song[]) => void;
   toggleLike: (song: Song) => void;
   isLiked: (songId: string) => boolean;
+  toggleFollowArtist: (artist: FollowedArtist) => void;
+  isArtistFollowed: (artistIdOrName: string | number) => boolean;
   addToHistory: (song: Song) => void;
   getNextTrack: () => Song | null;
   consumeNextTrack: () => Song | null;
@@ -46,6 +50,14 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return [];
   });
 
+  const [followedArtists, setFollowedArtists] = useState<FollowedArtist[]>(() => {
+    const saved = localStorage.getItem('moodsonix_followed_artists');
+    if (saved) {
+      try { return JSON.parse(saved); } catch {}
+    }
+    return [];
+  });
+
   useEffect(() => {
     localStorage.setItem('moodsonix_queue', JSON.stringify(queue));
   }, [queue]);
@@ -57,6 +69,10 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     localStorage.setItem('moodsonix_liked', JSON.stringify(likedSongs));
   }, [likedSongs]);
+
+  useEffect(() => {
+    localStorage.setItem('moodsonix_followed_artists', JSON.stringify(followedArtists));
+  }, [followedArtists]);
 
   const addToQueue = (song: Song) => {
     setQueue(prev => [...prev, song]);
@@ -102,6 +118,30 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return likedSongs.some(s => s.id === songId);
   };
 
+  const toggleFollowArtist = (artist: FollowedArtist) => {
+    setFollowedArtists(prev => {
+      const normId = String(artist.id).toLowerCase();
+      const normName = artist.name.toLowerCase().trim();
+      const exists = prev.some(
+        a => String(a.id).toLowerCase() === normId || a.name.toLowerCase().trim() === normName
+      );
+      if (exists) {
+        return prev.filter(
+          a => String(a.id).toLowerCase() !== normId && a.name.toLowerCase().trim() !== normName
+        );
+      } else {
+        return [{ ...artist, followedAt: Date.now() }, ...prev];
+      }
+    });
+  };
+
+  const isArtistFollowed = (artistIdOrName: string | number): boolean => {
+    const target = String(artistIdOrName).toLowerCase().trim();
+    return followedArtists.some(
+      a => String(a.id).toLowerCase().trim() === target || a.name.toLowerCase().trim() === target
+    );
+  };
+
   const addToHistory = (song: Song) => {
     setHistory(prev => {
       const filtered = prev.filter(s => s.id !== song.id);
@@ -130,6 +170,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         queue,
         history,
         likedSongs,
+        followedArtists,
         addToQueue,
         playNext,
         removeFromQueue,
@@ -138,6 +179,8 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setQueueList,
         toggleLike,
         isLiked,
+        toggleFollowArtist,
+        isArtistFollowed,
         addToHistory,
         getNextTrack,
         consumeNextTrack,

@@ -9,13 +9,15 @@ interface MobileNavProps {
 }
 
 export const MobileNav: React.FC<MobileNavProps> = ({ currentPage, onNavigate }) => {
-  const { queue, likedSongs } = useQueue();
+  const { queue, likedSongs, followedArtists } = useQueue();
+
+  const totalLibraryCount = likedSongs.length + followedArtists.length;
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'queue', label: 'Queue', icon: ListMusic, badge: queue.length > 0 ? queue.length : undefined },
-    { id: 'liked', label: 'Liked', icon: Heart, badge: likedSongs.length > 0 ? likedSongs.length : undefined },
+    { id: 'liked', label: 'Library', icon: Heart, badge: totalLibraryCount > 0 ? totalLibraryCount : undefined },
     { id: 'account', label: 'Account', icon: User }
   ];
 

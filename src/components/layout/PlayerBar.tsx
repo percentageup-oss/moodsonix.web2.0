@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { QualityMenu } from '../music/QualityMenu';
 import { MiniVisualizer } from '../music/MiniVisualizer';
+import { ArtistLinks } from '../music/ArtistLinks';
 
 export const PlayerBar: React.FC = () => {
   const {
@@ -119,7 +120,7 @@ export const PlayerBar: React.FC = () => {
                 {currentSong.title}
               </p>
               <p className="text-[11px] text-[var(--text-secondary)] truncate">
-                {currentSong.artist}
+                <ArtistLinks artist={currentSong.artist} className="truncate block" />
               </p>
             </div>
           </div>
@@ -203,7 +204,7 @@ export const PlayerBar: React.FC = () => {
                 {currentSong.title}
               </p>
               <p className="text-[11px] text-[var(--text-secondary)] truncate mt-0.5">
-                {currentSong.artist}
+                <ArtistLinks artist={currentSong.artist} className="truncate block" />
               </p>
             </div>
 

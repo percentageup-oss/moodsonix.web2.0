@@ -25,6 +25,7 @@ import { LyricsPanel } from './LyricsPanel';
 import { QualityMenu } from './QualityMenu';
 import { MiniVisualizer } from './MiniVisualizer';
 import { SongRow } from './SongRow';
+import { ArtistLinks } from './ArtistLinks';
 
 interface NowPlayingModalProps {
   isOpen: boolean;
@@ -165,7 +166,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
                   {currentSong.title}
                 </h2>
                 <p className="text-sm sm:text-base text-[var(--text-secondary)] truncate mt-1">
-                  {currentSong.artist}
+                  <ArtistLinks artist={currentSong.artist} className="text-sm sm:text-base text-[var(--text-secondary)] truncate block" />
                 </p>
               </div>
               <button

@@ -6,6 +6,8 @@ import { formatTime, cn } from '../../lib/utils';
 import { Play, Pause, Heart, ListPlus, Share2, MoreVertical, Disc, Loader2 } from 'lucide-react';
 import { MiniVisualizer } from './MiniVisualizer';
 
+import { ArtistLinks } from './ArtistLinks';
+
 interface SongRowProps {
   song: Song;
   index?: number;
@@ -93,7 +95,7 @@ export const SongRow: React.FC<SongRowProps> = ({ song, index, onShare }) => {
             {song.title}
           </p>
           <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1.5 mt-0.5">
-            <span>{song.artist}</span>
+            <ArtistLinks artist={song.artist} className="truncate" />
             {song.album && (
               <>
                 <span className="text-[var(--text-muted)]">•</span>

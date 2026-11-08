@@ -8,6 +8,7 @@ import { useQueue } from '../../context/QueueContext';
 import { formatTime, cn } from '../../lib/utils';
 import { Play, Pause, Heart, ListPlus, Share2, MoreVertical, Disc, Loader2 } from 'lucide-react';
 import { MiniVisualizer } from './MiniVisualizer';
+import { ArtistLinks } from './ArtistLinks';
 
 interface ArtistSongRowProps {
   song: ItunesSong;
@@ -178,7 +179,7 @@ export const ArtistSongRow: React.FC<ArtistSongRowProps> = ({
             {song.trackName}
           </p>
           <p className="text-xs text-[var(--text-secondary)] truncate flex items-center gap-1.5 mt-0.5">
-            <span>{song.artistName}</span>
+            <ArtistLinks artist={song.artistName} className="truncate" />
             {song.collectionName && (
               <>
                 <span className="text-[var(--text-muted)]">•</span>

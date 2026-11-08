@@ -7,6 +7,7 @@ import { ArtistSongRow } from './ArtistSongRow';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
 import { X, Play, Loader2, Disc, Calendar, Music } from 'lucide-react';
+import { ArtistLinks } from './ArtistLinks';
 
 interface AlbumModalProps {
   album: ItunesAlbum | null;
@@ -140,7 +141,7 @@ export const AlbumModal: React.FC<AlbumModalProps> = ({
                 {album.collectionName}
               </h2>
               <p className="text-sm font-medium text-[var(--text-secondary)] mt-1">
-                {album.artistName}
+                <ArtistLinks artist={album.artistName} className="block" />
               </p>
 
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-3 text-xs text-[var(--text-muted)] font-mono">

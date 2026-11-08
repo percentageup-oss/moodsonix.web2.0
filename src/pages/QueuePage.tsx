@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { MiniVisualizer } from '../components/music/MiniVisualizer';
 import { SongRow } from '../components/music/SongRow';
+import { ArtistLinks } from '../components/music/ArtistLinks';
 
 interface QueuePageProps {
   onShareSong: (song: Song) => void;
@@ -74,7 +75,7 @@ export const QueuePage: React.FC<QueuePageProps> = ({ onShareSong, onNavigate })
                   {currentSong.title}
                 </p>
                 <p className="text-xs text-[var(--text-secondary)] truncate mt-0.5">
-                  {currentSong.artist}
+                  <ArtistLinks artist={currentSong.artist} className="truncate block" />
                 </p>
                 <span className="text-[10px] font-mono text-[var(--text-muted)] mt-1 inline-block">
                   {formatTime(currentSong.duration)}
@@ -145,7 +146,7 @@ export const QueuePage: React.FC<QueuePageProps> = ({ onShareSong, onNavigate })
                       {song.title}
                     </p>
                     <p className="text-[11px] text-[var(--text-secondary)] truncate">
-                      {song.artist}
+                      <ArtistLinks artist={song.artist} className="truncate block" />
                     </p>
                   </div>
                 </div>
