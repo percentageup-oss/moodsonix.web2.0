@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Song } from '../../types/music';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
+import { usePlaylists } from '../../context/PlaylistContext';
 import { formatTime, cn } from '../../lib/utils';
-import { Play, Pause, Heart, ListPlus, Share2, MoreVertical, Disc, Loader2 } from 'lucide-react';
+import { Play, Pause, Heart, ListPlus, Share2, MoreVertical, Disc, Loader2, FolderPlus } from 'lucide-react';
 import { MiniVisualizer } from './MiniVisualizer';
 
 import { ArtistLinks } from './ArtistLinks';
@@ -17,6 +18,7 @@ interface SongRowProps {
 export const SongRow: React.FC<SongRowProps> = ({ song, index, onShare }) => {
   const { currentSong, isPlaying, isLoading, playSong, togglePlay } = usePlayer();
   const { addToQueue, playNext, toggleLike, isLiked } = useQueue();
+  const { setAddToPlaylistTarget } = usePlaylists();
   const [showMenu, setShowMenu] = useState(false);
 
   const isCurrent = currentSong?.id === song.id;
@@ -161,6 +163,16 @@ export const SongRow: React.FC<SongRowProps> = ({ song, index, onShare }) => {
                 >
                   <Disc className="w-4 h-4 text-[var(--accent)]" />
                   <span>Play Next</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setAddToPlaylistTarget(song);
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[var(--text-primary)] hover:bg-[var(--surface)] transition-colors"
+                >
+                  <FolderPlus className="w-4 h-4 text-[var(--accent)]" />
+                  <span>Add to Playlist</span>
                 </button>
                 {onShare && (
                   <button

@@ -1,7 +1,8 @@
 import React from 'react';
 import { useQueue } from '../../context/QueueContext';
+import { usePlaylists } from '../../context/PlaylistContext';
 import { cn } from '../../lib/utils';
-import { Home, Search, ListMusic, Heart, User } from 'lucide-react';
+import { Home, Globe, Search, Heart, User } from 'lucide-react';
 
 interface MobileNavProps {
   currentPage: string;
@@ -9,15 +10,22 @@ interface MobileNavProps {
 }
 
 export const MobileNav: React.FC<MobileNavProps> = ({ currentPage, onNavigate }) => {
-  const { queue, likedSongs, followedArtists } = useQueue();
+  const { likedSongs, followedArtists } = useQueue();
+  const { myPlaylists } = usePlaylists();
 
-  const totalLibraryCount = likedSongs.length + followedArtists.length;
+  const totalLibraryCount =
+    likedSongs.length + myPlaylists.length + followedArtists.length;
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'explore', label: 'Explore', icon: Globe },
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'queue', label: 'Queue', icon: ListMusic, badge: queue.length > 0 ? queue.length : undefined },
-    { id: 'liked', label: 'Library', icon: Heart, badge: totalLibraryCount > 0 ? totalLibraryCount : undefined },
+    {
+      id: 'liked',
+      label: 'Library',
+      icon: Heart,
+      badge: totalLibraryCount > 0 ? totalLibraryCount : undefined
+    },
     { id: 'account', label: 'Account', icon: User }
   ];
 
@@ -31,7 +39,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ currentPage, onNavigate })
             key={item.id}
             onClick={() => onNavigate(item.id)}
             className={cn(
-              'flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all relative',
+              'flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all relative cursor-pointer',
               isActive
                 ? 'text-[var(--accent)] font-semibold'
                 : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -40,7 +48,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ currentPage, onNavigate })
             <div className="relative">
               <Icon className="w-5 h-5" />
               {item.badge !== undefined && (
-                <span className="absolute -top-1.5 -right-2 px-1 min-w-3.5 h-3.5 rounded-full bg-[var(--accent)] text-black font-mono text-[9px] font-bold flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-2 px-1 min-w-3.5 h-3.5 rounded-full bg-[var(--accent)] text-black font-mono text-[9px] font-bold flex items-center justify-center tabular-nums">
                   {item.badge}
                 </span>
               )}

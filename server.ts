@@ -1,4 +1,5 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
+import type { Request, Response } from 'express';
 import { Innertube, UniversalCache, Log, Parser } from 'youtubei.js';
 import { GoogleGenAI } from '@google/genai';
 import path from 'path';

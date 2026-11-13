@@ -2,8 +2,9 @@ import React from 'react';
 import { Song } from '../../types/music';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
+import { usePlaylists } from '../../context/PlaylistContext';
 import { formatTime, cn } from '../../lib/utils';
-import { Play, Pause, Heart, ListPlus, Loader2 } from 'lucide-react';
+import { Play, Pause, Heart, ListPlus, Loader2, FolderPlus } from 'lucide-react';
 import { ArtistLinks } from './ArtistLinks';
 
 interface SongCardProps {
@@ -14,6 +15,7 @@ interface SongCardProps {
 export const SongCard: React.FC<SongCardProps> = ({ song }) => {
   const { currentSong, isPlaying, isLoading, playSong, togglePlay } = usePlayer();
   const { addToQueue, toggleLike, isLiked } = useQueue();
+  const { setAddToPlaylistTarget } = usePlaylists();
 
   const isCurrent = currentSong?.id === song.id;
   const isSongPlaying = isCurrent && isPlaying;
@@ -107,13 +109,23 @@ export const SongCard: React.FC<SongCardProps> = ({ song }) => {
           <Heart className={cn('w-3.5 h-3.5', liked && 'fill-current')} />
         </button>
 
-        <button
-          onClick={() => addToQueue(song)}
-          title="Add to queue"
-          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors"
-        >
-          <ListPlus className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setAddToPlaylistTarget(song)}
+            title="Add to playlist"
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => addToQueue(song)}
+            title="Add to queue"
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+          >
+            <ListPlus className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

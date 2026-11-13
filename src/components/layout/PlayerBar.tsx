@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
+import { usePlaylists } from '../../context/PlaylistContext';
 import { formatTime, cn } from '../../lib/utils';
 import {
   Play,
@@ -21,7 +22,8 @@ import {
   Tv,
   X,
   Loader2,
-  RotateCcw
+  RotateCcw,
+  FolderPlus
 } from 'lucide-react';
 import { QualityMenu } from '../music/QualityMenu';
 import { MiniVisualizer } from '../music/MiniVisualizer';
@@ -58,6 +60,7 @@ export const PlayerBar: React.FC = () => {
   } = usePlayer();
 
   const { toggleLike, isLiked } = useQueue();
+  const { setAddToPlaylistTarget } = usePlaylists();
   const [showQualityMenu, setShowQualityMenu] = useState(false);
 
   if (!currentSong) return null;
@@ -142,6 +145,15 @@ export const PlayerBar: React.FC = () => {
             </button>
 
             <button
+              onClick={() => setAddToPlaylistTarget(currentSong)}
+              className="p-2 rounded-full text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+              title="Add to playlist"
+              aria-label="Add to playlist"
+            >
+              <FolderPlus className="w-4 h-4" />
+            </button>
+
+            <button
               onClick={() => toggleLike(currentSong)}
               className={cn(
                 'p-2 rounded-full transition-colors',
@@ -211,11 +223,20 @@ export const PlayerBar: React.FC = () => {
             <button
               onClick={() => toggleLike(currentSong)}
               className={cn(
-                'p-2 rounded-lg transition-colors hover:bg-[var(--surface)]',
+                'p-2 rounded-lg transition-colors hover:bg-[var(--surface)] cursor-pointer',
                 liked ? 'text-red-500' : 'text-[var(--text-muted)] hover:text-white'
               )}
             >
               <Heart className={cn('w-4 h-4', liked && 'fill-current')} />
+            </button>
+
+            <button
+              onClick={() => setAddToPlaylistTarget(currentSong)}
+              className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface)] transition-colors cursor-pointer"
+              title="Add to playlist"
+              aria-label="Add to playlist"
+            >
+              <FolderPlus className="w-4 h-4" />
             </button>
           </div>
 

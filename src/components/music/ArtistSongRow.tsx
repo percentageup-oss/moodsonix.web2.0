@@ -5,8 +5,9 @@ import { upscaleArtwork, itunesSongToMoodsonixSong } from '../../services/itunes
 import { searchMusic } from '../../services/musicApi';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
+import { usePlaylists } from '../../context/PlaylistContext';
 import { formatTime, cn } from '../../lib/utils';
-import { Play, Pause, Heart, ListPlus, Share2, MoreVertical, Disc, Loader2 } from 'lucide-react';
+import { Play, Pause, Heart, ListPlus, Share2, MoreVertical, Disc, Loader2, FolderPlus } from 'lucide-react';
 import { MiniVisualizer } from './MiniVisualizer';
 import { ArtistLinks } from './ArtistLinks';
 
@@ -25,6 +26,7 @@ export const ArtistSongRow: React.FC<ArtistSongRowProps> = ({
 }) => {
   const { currentSong, isPlaying, isLoading, playSong, togglePlay } = usePlayer();
   const { addToQueue, playNext, toggleLike, isLiked } = useQueue();
+  const { setAddToPlaylistTarget } = usePlaylists();
 
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -267,6 +269,17 @@ export const ArtistSongRow: React.FC<ArtistSongRowProps> = ({
                 >
                   <Disc className="w-4 h-4 text-[var(--accent)]" />
                   <span>Play Next</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setAddToPlaylistTarget(moodsonixSong);
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[var(--text-primary)] hover:bg-[var(--surface)] transition-colors"
+                >
+                  <FolderPlus className="w-4 h-4 text-[var(--accent)]" />
+                  <span>Add to Playlist</span>
                 </button>
 
                 <button

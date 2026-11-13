@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
+import { usePlaylists } from '../../context/PlaylistContext';
 import { formatTime, cn } from '../../lib/utils';
 import {
   ChevronDown,
@@ -19,7 +20,8 @@ import {
   FileText,
   Sliders,
   Tv,
-  Loader2
+  Loader2,
+  FolderPlus
 } from 'lucide-react';
 import { LyricsPanel } from './LyricsPanel';
 import { QualityMenu } from './QualityMenu';
@@ -58,6 +60,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
   } = usePlayer();
 
   const { queue, toggleLike, isLiked } = useQueue();
+  const { setAddToPlaylistTarget } = usePlaylists();
   const [activeTab, setActiveTab] = useState<'track' | 'lyrics' | 'queue'>('track');
   const [showQualityMenu, setShowQualityMenu] = useState(false);
 
@@ -169,15 +172,25 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
                   <ArtistLinks artist={currentSong.artist} className="text-sm sm:text-base text-[var(--text-secondary)] truncate block" />
                 </p>
               </div>
-              <button
-                onClick={() => toggleLike(currentSong)}
-                className={cn(
-                  'p-3 rounded-full hover:bg-[var(--surface-elevated)] transition-colors',
-                  liked ? 'text-red-500' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                )}
-              >
-                <Heart className={cn('w-6 h-6', liked && 'fill-current')} />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => setAddToPlaylistTarget(currentSong)}
+                  title="Add to playlist"
+                  aria-label="Add to playlist"
+                  className="p-3 rounded-full text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+                >
+                  <FolderPlus className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => toggleLike(currentSong)}
+                  className={cn(
+                    'p-3 rounded-full hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer',
+                    liked ? 'text-red-500' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  )}
+                >
+                  <Heart className={cn('w-6 h-6', liked && 'fill-current')} />
+                </button>
+              </div>
             </div>
 
             {/* Seek Bar */}

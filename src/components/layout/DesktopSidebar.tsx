@@ -1,16 +1,16 @@
 import React from 'react';
 import { useQueue } from '../../context/QueueContext';
+import { usePlaylists } from '../../context/PlaylistContext';
 import { useUser } from '../../context/UserContext';
 import { cn } from '../../lib/utils';
 import {
   Home,
+  Globe,
   Search,
   ListMusic,
   Heart,
   User,
-  Sparkles,
   Keyboard,
-  Download,
   FolderInput,
   Sliders,
   LogOut,
@@ -35,15 +35,28 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   onOpenShortcuts
 }) => {
   const { queue, likedSongs, followedArtists } = useQueue();
+  const { myPlaylists } = usePlaylists();
   const { user, setShowAuthModal, logout } = useUser();
 
-  const totalLibraryCount = likedSongs.length + followedArtists.length;
+  const totalLibraryCount =
+    likedSongs.length + myPlaylists.length + followedArtists.length;
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'explore', label: 'Explore', icon: Globe },
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'queue', label: 'Queue', icon: ListMusic, badge: queue.length > 0 ? queue.length : undefined },
-    { id: 'liked', label: 'Library', icon: Heart, badge: totalLibraryCount > 0 ? totalLibraryCount : undefined },
+    {
+      id: 'queue',
+      label: 'Queue',
+      icon: ListMusic,
+      badge: queue.length > 0 ? queue.length : undefined
+    },
+    {
+      id: 'liked',
+      label: 'Library',
+      icon: Heart,
+      badge: totalLibraryCount > 0 ? totalLibraryCount : undefined
+    },
     { id: 'data-usage', label: 'Data Usage', icon: Activity },
     { id: 'account', label: 'Account', icon: User }
   ];
@@ -67,10 +80,12 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         <div>
           <h1 className="font-bold text-base tracking-tight text-[var(--text-primary)] flex items-center gap-1.5">
             Moodsonix
-            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[var(--accent)] text-black font-semibold">2.0</span>
+            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[var(--accent)] text-black font-semibold">
+              2.0
+            </span>
           </h1>
           <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-wider">
-            // AI MUSIC STREAM
+            AI MUSIC STREAM
           </p>
         </div>
       </div>
@@ -85,7 +100,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={cn(
-                'w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all',
+                'w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all cursor-pointer',
                 isActive
                   ? 'bg-[var(--surface-elevated)] text-[var(--accent)] font-semibold shadow-sm'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]'
@@ -96,7 +111,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 <span>{item.label}</span>
               </div>
               {item.badge !== undefined && (
-                <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface-secondary)] font-mono text-[10px] text-[var(--text-muted)]">
+                <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface-secondary)] font-mono text-[10px] text-[var(--text-muted)] tabular-nums">
                   {item.badge}
                 </span>
               )}
@@ -108,13 +123,13 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
       {/* Productivity & Tools Section */}
       <div className="pt-3 border-t border-[var(--border-color)] space-y-1 mb-auto">
         <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-2">
-          // UTILITIES
+          Utilities
         </span>
 
         {/* Tools Drawer Button */}
         <button
           onClick={onOpenTools}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer"
         >
           <Sliders className="w-4 h-4 text-[var(--accent)]" />
           <span>Focus & Ambient</span>
@@ -123,7 +138,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         {/* Import Playlist Button */}
         <button
           onClick={onOpenPlaylistImporter}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer"
         >
           <FolderInput className="w-4 h-4 text-emerald-400" />
           <span>Import Playlist</span>
@@ -132,7 +147,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         {/* Keyboard Shortcuts Hint */}
         <button
           onClick={onOpenShortcuts}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer"
         >
           <Keyboard className="w-4 h-4 text-[var(--text-muted)]" />
           <span>Shortcuts</span>
@@ -145,9 +160,20 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
         {/* User Card */}
         <div className="p-2.5 rounded-2xl bg-[var(--surface-secondary)] border border-[var(--border-color)] flex items-center justify-between">
-          <div className="min-w-0 flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-color)] flex items-center justify-center text-xs font-semibold text-[var(--accent)] shrink-0">
-              {user.displayName.charAt(0).toUpperCase()}
+          <div
+            onClick={() => onNavigate('account')}
+            className="min-w-0 flex items-center gap-2.5 cursor-pointer flex-1"
+          >
+            <div className="w-7 h-7 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-color)] flex items-center justify-center text-xs font-semibold text-[var(--accent)] shrink-0 overflow-hidden">
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                user.displayName.charAt(0).toUpperCase()
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold truncate text-[var(--text-primary)]">
@@ -163,7 +189,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             <button
               onClick={() => setShowAuthModal(true)}
               title="Sign in"
-              className="p-1.5 rounded-lg text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors"
+              className="p-1.5 rounded-lg text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
             >
               <LogIn className="w-4 h-4" />
             </button>
@@ -171,7 +197,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             <button
               onClick={logout}
               title="Sign out"
-              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--surface-elevated)] transition-colors"
+              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>

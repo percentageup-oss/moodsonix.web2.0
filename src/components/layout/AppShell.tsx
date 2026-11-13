@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
-import { useQueue } from '../../context/QueueContext';
 import { ArtistNavigationContext } from '../../context/ArtistNavigationContext';
 import { DesktopSidebar } from './DesktopSidebar';
 import { MobileNav } from './MobileNav';
@@ -12,6 +11,9 @@ import { ShareSongModal } from '../common/ShareSongModal';
 import { NowPlayingModal } from '../music/NowPlayingModal';
 import { VideoPlayerDock } from '../music/VideoPlayerDock';
 import { AuthModal } from '../common/AuthModal';
+import { CloudSyncModal } from '../common/CloudSyncModal';
+import { AddToPlaylistModal } from '../music/AddToPlaylistModal';
+import { ToastContainer } from '../common/ToastContainer';
 import { OfflineBanner } from '../common/OfflineBanner';
 import { WelcomeSplash } from '../common/WelcomeSplash';
 import { Song } from '../../types/music';
@@ -21,16 +23,23 @@ import { HomePage } from '../../pages/HomePage';
 import { SearchPage } from '../../pages/SearchPage';
 import { QueuePage } from '../../pages/QueuePage';
 import { LikedSongsPage } from '../../pages/LikedSongsPage';
+import { ExplorePage } from '../../pages/ExplorePage';
+import { PlaylistPage } from '../../pages/PlaylistPage';
 import { AccountPage } from '../../pages/AccountPage';
 import { ArtistPage } from '../../pages/ArtistPage';
 import { DataUsagePage } from '../../pages/DataUsagePage';
 import { ItunesArtist } from '../../types/artist';
 
-import { Sliders } from 'lucide-react';
+import { Sliders, ListMusic } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // Helper to inspect current URL path for initial routing
-function parseRouteFromUrl(): { page: string; artistParam?: string; query?: string } {
+function parseRouteFromUrl(): {
+  page: string;
+  artistParam?: string;
+  playlistId?: string;
+  query?: string;
+} {
   if (typeof window === 'undefined') return { page: 'home' };
   const path = window.location.pathname;
 
@@ -42,6 +51,15 @@ function parseRouteFromUrl(): { page: string; artistParam?: string; query?: stri
     }
   }
 
+  if (path.startsWith('/playlist/')) {
+    const raw = path.replace('/playlist/', '');
+    const decoded = decodeURIComponent(raw).replace(/\/+$/, '').trim();
+    if (decoded) {
+      return { page: 'playlist', playlistId: decoded };
+    }
+  }
+
+  if (path === '/explore') return { page: 'explore' };
   if (path === '/queue') return { page: 'queue' };
   if (path === '/library' || path === '/liked') return { page: 'liked' };
   if (path === '/search') {
@@ -59,6 +77,7 @@ export const AppShell: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<string>(initialRoute.page);
   const [searchInitialQuery, setSearchInitialQuery] = useState<string>(initialRoute.query || '');
   const [selectedArtistParam, setSelectedArtistParam] = useState<string>(initialRoute.artistParam || '');
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>(initialRoute.playlistId || '');
   const [selectedArtistMeta, setSelectedArtistMeta] = useState<Partial<ItunesArtist> | null>(null);
 
   // Modals state
@@ -97,6 +116,8 @@ export const AppShell: React.FC = () => {
       window.history.pushState({ page: 'search', query }, '', url);
     } else if (page === 'home') {
       window.history.pushState({ page: 'home' }, '', '/');
+    } else if (page === 'explore') {
+      window.history.pushState({ page: 'explore' }, '', '/explore');
     } else if (page === 'queue') {
       window.history.pushState({ page: 'queue' }, '', '/queue');
     } else if (page === 'liked') {
@@ -108,26 +129,45 @@ export const AppShell: React.FC = () => {
     }
   }, []);
 
+  const openPlaylist = useCallback(
+    (playlistId: string) => {
+      const cleanId = playlistId.trim();
+      if (!cleanId) return;
+      setIsNowPlayingOpen(false);
+      setSelectedPlaylistId(cleanId);
+      setCurrentPage('playlist');
+      window.history.pushState(
+        { page: 'playlist', playlistId: cleanId },
+        '',
+        `/playlist/${encodeURIComponent(cleanId)}`
+      );
+    },
+    [setIsNowPlayingOpen]
+  );
+
   // Global openArtist function
-  const openArtist = useCallback((artistIdOrName: string | number, fallbackMeta?: Partial<ItunesArtist>) => {
-    const param = String(artistIdOrName).trim();
-    if (!param) return;
+  const openArtist = useCallback(
+    (artistIdOrName: string | number, fallbackMeta?: Partial<ItunesArtist>) => {
+      const param = String(artistIdOrName).trim();
+      if (!param) return;
 
-    // Collapse full screen player if open, keeping audio playing uninterrupted
-    setIsNowPlayingOpen(false);
+      // Collapse full screen player if open, keeping audio playing uninterrupted
+      setIsNowPlayingOpen(false);
 
-    setSelectedArtistParam(param);
-    if (fallbackMeta) {
-      setSelectedArtistMeta(fallbackMeta);
-    } else {
-      setSelectedArtistMeta(null);
-    }
-    setCurrentPage('artist');
+      setSelectedArtistParam(param);
+      if (fallbackMeta) {
+        setSelectedArtistMeta(fallbackMeta);
+      } else {
+        setSelectedArtistMeta(null);
+      }
+      setCurrentPage('artist');
 
-    // Update browser history URL
-    const targetUrl = `/artist/${encodeURIComponent(param)}`;
-    window.history.pushState({ page: 'artist', artistParam: param }, '', targetUrl);
-  }, [setIsNowPlayingOpen]);
+      // Update browser history URL
+      const targetUrl = `/artist/${encodeURIComponent(param)}`;
+      window.history.pushState({ page: 'artist', artistParam: param }, '', targetUrl);
+    },
+    [setIsNowPlayingOpen]
+  );
 
   const closeArtist = useCallback(() => {
     window.history.back();
@@ -135,11 +175,13 @@ export const AppShell: React.FC = () => {
 
   // Listen to browser Back/Forward (popstate) buttons
   useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
+    const handlePopState = () => {
       const route = parseRouteFromUrl();
       setCurrentPage(route.page);
       if (route.page === 'artist' && route.artistParam) {
         setSelectedArtistParam(route.artistParam);
+      } else if (route.page === 'playlist' && route.playlistId) {
+        setSelectedPlaylistId(route.playlistId);
       } else if (route.page === 'search' && route.query) {
         setSearchInitialQuery(route.query);
       }
@@ -233,6 +275,13 @@ export const AppShell: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlay, seekTo, currentTime, duration, nextTrack, previousTrack, toggleMute]);
 
+  const activeNavKey =
+    currentPage === 'artist'
+      ? 'search'
+      : currentPage === 'playlist'
+      ? 'liked'
+      : currentPage;
+
   return (
     <ArtistNavigationContext.Provider value={{ openArtist, closeArtist }}>
       <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg)] text-[var(--text-primary)]">
@@ -248,7 +297,7 @@ export const AppShell: React.FC = () => {
         {/* Desktop Sidebar (Fixed 240px) */}
         <div className="hidden md:block shrink-0">
           <DesktopSidebar
-            currentPage={currentPage === 'artist' ? 'search' : currentPage}
+            currentPage={activeNavKey}
             onNavigate={handleNavigate}
             onOpenTools={() => setIsToolsOpen(true)}
             onOpenPlaylistImporter={() => setIsPlaylistImporterOpen(true)}
@@ -259,7 +308,7 @@ export const AppShell: React.FC = () => {
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
           {/* Mobile Top Bar */}
-          <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[var(--surface)]/90 backdrop-blur-md border-b border-[var(--border-color)] shrink-0 z-20">
+          <header className="md:hidden flex items-center justify-between px-4 py-2.5 bg-[var(--surface)]/90 backdrop-blur-md border-b border-[var(--border-color)] shrink-0 z-20">
             <div
               onClick={() => handleNavigate('home')}
               className="flex items-center gap-2 cursor-pointer"
@@ -272,14 +321,28 @@ export const AppShell: React.FC = () => {
               </h1>
             </div>
 
-            {/* Quick Tools Button in mobile header */}
-            <button
-              onClick={() => setIsToolsOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] cursor-pointer"
-            >
-              <Sliders className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>Tools</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleNavigate('queue')}
+                aria-label="Open queue"
+                className={cn(
+                  'p-2 rounded-xl border text-xs transition-colors cursor-pointer',
+                  currentPage === 'queue'
+                    ? 'bg-[var(--accent)] text-black border-[var(--accent)]'
+                    : 'bg-[var(--surface-elevated)] border-[var(--border-color)] text-[var(--text-primary)]'
+                )}
+              >
+                <ListMusic className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setIsToolsOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] cursor-pointer"
+              >
+                <Sliders className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <span>Tools</span>
+              </button>
+            </div>
           </header>
 
           {/* Scrollable Page Body */}
@@ -296,6 +359,10 @@ export const AppShell: React.FC = () => {
                 onOpenPlaylistImporter={() => setIsPlaylistImporterOpen(true)}
                 onShareSong={handleShareSong}
               />
+            )}
+
+            {currentPage === 'explore' && (
+              <ExplorePage onOpenPlaylist={openPlaylist} />
             )}
 
             {currentPage === 'search' && (
@@ -318,6 +385,14 @@ export const AppShell: React.FC = () => {
               />
             )}
 
+            {currentPage === 'playlist' && selectedPlaylistId && (
+              <PlaylistPage
+                playlistId={selectedPlaylistId}
+                onNavigate={handleNavigate}
+                onShareSong={handleShareSong}
+              />
+            )}
+
             {currentPage === 'queue' && (
               <QueuePage
                 onShareSong={handleShareSong}
@@ -329,6 +404,7 @@ export const AppShell: React.FC = () => {
               <LikedSongsPage
                 onShareSong={handleShareSong}
                 onNavigate={handleNavigate}
+                onOpenPlaylist={openPlaylist}
               />
             )}
 
@@ -360,7 +436,7 @@ export const AppShell: React.FC = () => {
 
           {/* Mobile Navigation Bar */}
           <MobileNav
-            currentPage={currentPage === 'artist' ? 'search' : currentPage}
+            currentPage={activeNavKey}
             onNavigate={handleNavigate}
           />
         </div>
@@ -371,7 +447,7 @@ export const AppShell: React.FC = () => {
           onClose={() => setIsToolsOpen(false)}
           onNavigate={handleNavigate}
         />
-        
+
         <PlaylistImporterModal
           isOpen={isPlaylistImporterOpen}
           onClose={() => setIsPlaylistImporterOpen(false)}
@@ -396,7 +472,10 @@ export const AppShell: React.FC = () => {
           }}
         />
 
+        <AddToPlaylistModal />
+        <CloudSyncModal />
         <AuthModal />
+        <ToastContainer />
       </div>
     </ArtistNavigationContext.Provider>
   );
