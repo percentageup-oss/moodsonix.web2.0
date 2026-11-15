@@ -1,14 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { cn } from '../../lib/utils';
 import { getRenderSize } from '../../lib/streamQuality';
 import {
-  Tv,
+  Image as ImageIcon,
   Maximize2,
   X,
   Radio,
   ChevronDown
 } from 'lucide-react';
+import { MiniVisualizer } from './MiniVisualizer';
+
+interface SlotRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
 
 export const VideoPlayerDock: React.FC = () => {
   const {
@@ -16,17 +24,65 @@ export const VideoPlayerDock: React.FC = () => {
     isPlaying,
     isVideoOpen,
     setIsVideoOpen,
+    toggleVideo,
+    isNowPlayingOpen,
     setIsNowPlayingOpen,
-    effectiveQuality
+    effectiveQuality,
+    videoSlotElement
   } = usePlayer();
 
   const [isExpanded, setIsExpanded] = useState(false);
+  const [slotRect, setSlotRect] = useState<SlotRect | null>(null);
 
-  // Video preview is visible only when a song is loaded AND video toggle is on
-  const isVisible = Boolean(currentSong && isVideoOpen);
+  const isDirectAudio = Boolean(currentSong && (currentSong.source === 'audio' || currentSong.audioUrl));
+  const isEmbeddedInAlbumArt = Boolean(
+    currentSong && isVideoOpen && isNowPlayingOpen && videoSlotElement && !isDirectAudio
+  );
+  // Only show the floating mini popup when the full-screen player is closed and video mode is on
+  const isFloatingPopup = Boolean(
+    currentSong && isVideoOpen && !isNowPlayingOpen && !isDirectAudio
+  );
+
+  // Measure the album art slot synchronously so the single persistent YouTube iframe overlays it seamlessly
+  useLayoutEffect(() => {
+    if (!isEmbeddedInAlbumArt || !videoSlotElement) {
+      setSlotRect(null);
+      return;
+    }
+
+    const updateRect = () => {
+      const r = videoSlotElement.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        setSlotRect({
+          top: r.top,
+          left: r.left,
+          width: r.width,
+          height: r.height
+        });
+      }
+    };
+
+    updateRect();
+
+    const ro = new ResizeObserver(updateRect);
+    ro.observe(videoSlotElement);
+    ro.observe(document.documentElement);
+    window.addEventListener('resize', updateRect);
+    window.addEventListener('scroll', updateRect, true);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateRect);
+      window.removeEventListener('scroll', updateRect, true);
+    };
+  }, [isEmbeddedInAlbumArt, videoSlotElement]);
+
+  const isVisible = Boolean((isEmbeddedInAlbumArt && slotRect) || isFloatingPopup);
 
   // YouTube picks the stream resolution from the size the player is laid out at, so the player is
-  // always laid out at the size of the chosen quality and then scaled down with CSS to fit the dock.
+  // always laid out at the size of the chosen quality and then scaled to fit the container.
+  // When embedded inside the square album art, use Math.max (object-fit: cover) so the 16:9 video
+  // fills the rounded square without stretching or black letterbox bars.
   const boxRef = useRef<HTMLDivElement>(null);
   const render = getRenderSize(effectiveQuality);
   const [fit, setFit] = useState({ scale: 1, x: 0, y: 0 });
@@ -38,7 +94,9 @@ export const VideoPlayerDock: React.FC = () => {
       const boxW = el.clientWidth;
       const boxH = el.clientHeight;
       if (!boxW || !boxH) return;
-      const scale = Math.min(boxW / render.w, boxH / render.h);
+      const scale = isEmbeddedInAlbumArt
+        ? Math.max(boxW / render.w, boxH / render.h)
+        : Math.min(boxW / render.w, boxH / render.h);
       setFit({
         scale,
         x: (boxW - render.w * scale) / 2,
@@ -49,25 +107,38 @@ export const VideoPlayerDock: React.FC = () => {
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [render.w, render.h, isVisible, isExpanded]);
+  }, [render.w, render.h, isVisible, isExpanded, isEmbeddedInAlbumArt, slotRect]);
+
+  const embeddedStyle: React.CSSProperties | undefined =
+    isEmbeddedInAlbumArt && slotRect
+      ? {
+          top: slotRect.top,
+          left: slotRect.left,
+          width: slotRect.width,
+          height: slotRect.height
+        }
+      : undefined;
 
   return (
     <div
+      style={embeddedStyle}
       className={cn(
-        'transition-all duration-300 ease-out select-none',
+        'select-none',
         // When not visible: keep completely mounted so YouTube player & audio are never destroyed!
         // Offscreen with 1px dimensions and opacity 0 (NEVER display:none)
         !isVisible
           ? 'fixed -left-[9999px] -top-[9999px] w-[1px] h-[1px] opacity-0 pointer-events-none overflow-hidden z-[-1]'
-          // When visible and expanded: larger floating video player
+          : isEmbeddedInAlbumArt
+          ? 'fixed rounded-3xl overflow-hidden shadow-2xl bg-black border border-[var(--border-color)] z-[45] group'
+          // When floating and expanded: larger floating video player
           : isExpanded
           ? 'fixed bottom-24 right-4 md:right-8 w-72 h-44 sm:w-80 sm:h-48 md:w-96 md:h-56 rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-color)] bg-black flex flex-col glow-accent-sm z-40'
-          // When visible and not expanded: floating video preview dock
+          // When floating and not expanded: floating video preview dock
           : 'fixed bottom-20 md:bottom-24 right-4 w-52 h-32 md:w-60 md:h-36 rounded-2xl border border-[var(--border-color)] bg-black/95 shadow-xl overflow-hidden group z-40'
       )}
     >
-      {/* Header bar when visible and expanded */}
-      {isVisible && isExpanded && (
+      {/* Header bar when floating and expanded */}
+      {isFloatingPopup && isExpanded && (
         <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--surface-elevated)]/90 backdrop-blur-md border-b border-white/10 shrink-0 z-10 text-xs">
           <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
             <Radio className="w-3.5 h-3.5 text-[var(--accent)] animate-pulse shrink-0" />
@@ -105,8 +176,8 @@ export const VideoPlayerDock: React.FC = () => {
         </div>
       )}
 
-      {/* Floating mini-dock overlay controls on hover when visible and not expanded */}
-      {isVisible && !isExpanded && (
+      {/* Floating mini-dock overlay controls on hover when floating and not expanded */}
+      {isFloatingPopup && !isExpanded && (
         <div className="absolute top-1.5 right-1.5 z-20 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={() => setIsExpanded(true)}
@@ -126,7 +197,10 @@ export const VideoPlayerDock: React.FC = () => {
       )}
 
       {/* Actual YouTube Iframe Anchor: permanently mounted in the DOM */}
-      <div ref={boxRef} className="w-full h-full flex-1 relative bg-black min-h-0 overflow-hidden">
+      <div
+        ref={boxRef}
+        className="w-full h-full flex-1 relative bg-black min-h-0 overflow-hidden pointer-events-none"
+      >
         <div
           style={{
             width: render.w,
@@ -135,12 +209,30 @@ export const VideoPlayerDock: React.FC = () => {
             transformOrigin: 'top left'
           }}
         >
-          <div id="youtube-player-iframe" className="w-full h-full" />
+          <div id="youtube-player-iframe" className="w-full h-full pointer-events-none" />
         </div>
       </div>
 
-      {/* Docked bottom audio status badge when visible and not expanded */}
-      {isVisible && !isExpanded && (
+      {/* Photo View toggle & MiniVisualizer overlay when docked inside the full-screen album art */}
+      {isEmbeddedInAlbumArt && slotRect && (
+        <>
+          <button
+            type="button"
+            onClick={toggleVideo}
+            className="absolute top-3 right-3 z-20 px-3 py-1.5 rounded-xl backdrop-blur-md border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)] cursor-pointer"
+            title="Switch to photo view"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Photo View</span>
+          </button>
+          <div className="absolute bottom-3 right-3 z-20 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md pointer-events-none">
+            <MiniVisualizer isPlaying={isPlaying} barCount={5} />
+          </div>
+        </>
+      )}
+
+      {/* Docked bottom audio status badge when floating and not expanded */}
+      {isFloatingPopup && !isExpanded && (
         <div
           onClick={() => setIsExpanded(true)}
           className="absolute bottom-0 inset-x-0 px-2.5 py-1 bg-gradient-to-t from-black/95 via-black/75 to-transparent flex items-center justify-between cursor-pointer group-hover:from-black transition-colors"

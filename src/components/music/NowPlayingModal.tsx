@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
 import { usePlaylists } from '../../context/PlaylistContext';
@@ -20,6 +20,7 @@ import {
   FileText,
   Sliders,
   Tv,
+  Image as ImageIcon,
   Loader2,
   FolderPlus
 } from 'lucide-react';
@@ -55,22 +56,36 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
     nextTrack,
     previousTrack,
     isVideoOpen,
-    setIsVideoOpen,
-    toggleVideo
+    toggleVideo,
+    setVideoSlotElement
   } = usePlayer();
 
   const { queue, toggleLike, isLiked } = useQueue();
   const { setAddToPlaylistTarget } = usePlaylists();
   const [activeTab, setActiveTab] = useState<'track' | 'lyrics' | 'queue'>('track');
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+  const albumArtRef = useRef<HTMLDivElement | null>(null);
+
+  const isTrackTabVisible = isOpen && Boolean(currentSong) && activeTab === 'track';
+
+  useEffect(() => {
+    if (isTrackTabVisible && albumArtRef.current) {
+      setVideoSlotElement(albumArtRef.current);
+      return () => setVideoSlotElement(null);
+    }
+    setVideoSlotElement(null);
+    return undefined;
+  }, [isTrackTabVisible, setVideoSlotElement]);
 
   if (!isOpen || !currentSong) return null;
 
   const liked = isLiked(currentSong.id);
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const isDirectAudio = Boolean(currentSong.source === 'audio' || currentSong.audioUrl);
+  const showEmbeddedVideo = isVideoOpen && !isDirectAudio;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--bg)]/98 backdrop-blur-2xl text-[var(--text-primary)] transition-all duration-300">
+    <div className="fixed inset-0 z-[42] flex flex-col bg-[var(--bg)]/98 backdrop-blur-2xl text-[var(--text-primary)] transition-all duration-300">
       {/* Top Header Bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)] shrink-0">
         <button
@@ -134,32 +149,44 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
       <div className="flex-1 overflow-hidden p-4 md:p-8 flex flex-col justify-center max-w-4xl mx-auto w-full">
         {activeTab === 'track' && (
           <div className="flex flex-col items-center justify-center max-w-md mx-auto w-full">
-            {/* Big Artwork with lime glow */}
-            <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-3xl overflow-hidden shadow-2xl bg-[var(--surface-secondary)] border border-[var(--border-color)] mb-8 group">
+            {/* Big Artwork / Embedded Video Container */}
+            <div
+              ref={albumArtRef}
+              className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-3xl overflow-hidden shadow-2xl bg-[var(--surface-secondary)] border border-[var(--border-color)] mb-8 group"
+            >
               <img
                 src={currentSong.thumbnail}
                 alt={currentSong.title}
-                className="w-full h-full object-cover"
-              />
-              <button
-                onClick={() => {
-                  setIsVideoOpen(true);
-                  onClose();
-                }}
                 className={cn(
-                  'absolute top-3 right-3 px-3 py-1.5 rounded-xl backdrop-blur-md border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all',
-                  isVideoOpen
-                    ? 'bg-[var(--accent)] text-black font-semibold'
-                    : 'bg-black/70 text-white hover:bg-[var(--accent)] hover:text-black'
+                  'w-full h-full object-cover transition-opacity duration-200',
+                  showEmbeddedVideo && 'opacity-0'
                 )}
-                title="Switch to video view"
-              >
-                <Tv className="w-3.5 h-3.5" />
-                <span>Video View</span>
-              </button>
-              <div className="absolute bottom-3 right-3 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md">
-                <MiniVisualizer isPlaying={isPlaying} barCount={5} />
-              </div>
+              />
+              {!showEmbeddedVideo && (
+                <>
+                  <button
+                    onClick={toggleVideo}
+                    className="absolute top-3 right-3 px-3 py-1.5 rounded-xl backdrop-blur-md border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all bg-black/70 text-white hover:bg-[var(--accent)] hover:text-black cursor-pointer"
+                    title="Switch to video view"
+                  >
+                    <Tv className="w-3.5 h-3.5" />
+                    <span>Video View</span>
+                  </button>
+                  <div className="absolute bottom-3 right-3 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md">
+                    <MiniVisualizer isPlaying={isPlaying} barCount={5} />
+                  </div>
+                </>
+              )}
+              {isDirectAudio && isVideoOpen && (
+                <button
+                  onClick={toggleVideo}
+                  className="absolute top-3 right-3 px-3 py-1.5 rounded-xl backdrop-blur-md border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all bg-[var(--accent)] text-black cursor-pointer"
+                  title="Switch to photo view"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Photo View</span>
+                </button>
+              )}
             </div>
 
             {/* Song Meta & Like */}

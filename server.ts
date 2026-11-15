@@ -16,7 +16,14 @@ try {
 } catch {}
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const portArgIdx = process.argv.indexOf('--port');
+const cliPort = portArgIdx !== -1 ? Number(process.argv[portArgIdx + 1]) : NaN;
+const isProdEnv = process.env.NODE_ENV === 'production' || process.env.npm_lifecycle_event === 'start';
+const PORT = (Number.isFinite(cliPort) && cliPort > 0)
+  ? cliPort
+  : isProdEnv
+    ? (Number(process.env.PORT) || 3000)
+    : 3000;
 const HOST = '0.0.0.0';
 
 app.use(express.json());
@@ -751,7 +758,8 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: false
+        hmr: false,
+        ws: false
       },
       appType: 'spa'
     });

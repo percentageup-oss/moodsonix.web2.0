@@ -30,6 +30,8 @@ interface PlayerContextType {
   isVideoOpen: boolean;
   setIsVideoOpen: (open: boolean) => void;
   toggleVideo: () => void;
+  videoSlotElement: HTMLElement | null;
+  setVideoSlotElement: (el: HTMLElement | null) => void;
   isLoading: boolean;
   connectionError: string | null;
   retryCurrentSong: () => void;
@@ -117,6 +119,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return false;
     }
   });
+  const [videoSlotElement, setVideoSlotElement] = useState<HTMLElement | null>(null);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -1104,10 +1107,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           videoId: initialYtVideoId,
           playerVars: {
             autoplay: 0,
-            controls: 1,
+            controls: 0,
             disablekb: 1,
             enablejsapi: 1,
             fs: 0,
+            iv_load_policy: 3,
             modestbranding: 1,
             playsinline: 1,
             rel: 0,
@@ -1348,6 +1352,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isVideoOpen,
         setIsVideoOpen: handleSetIsVideoOpen,
         toggleVideo,
+        videoSlotElement,
+        setVideoSlotElement,
         isLoading,
         connectionError,
         retryCurrentSong,
