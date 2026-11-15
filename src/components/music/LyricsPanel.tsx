@@ -99,7 +99,8 @@ export const LyricsPanel: React.FC<LyricsPanelProps> = ({ currentSong, className
       {/* Lyrics Scrollable Area */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto space-y-4 py-8 px-2 scroll-smooth text-center"
+        data-scroll-container="true"
+        className="flex-1 overflow-y-auto overscroll-y-contain space-y-4 py-8 px-2 scroll-smooth text-center"
       >
         {lyrics.syncedLyrics && lyrics.syncedLyrics.length > 0 ? (
           lyrics.syncedLyrics.map((line, idx) => {

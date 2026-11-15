@@ -28,11 +28,13 @@ export const VideoPlayerDock: React.FC = () => {
     isNowPlayingOpen,
     setIsNowPlayingOpen,
     effectiveQuality,
-    videoSlotElement
+    videoSlotElement,
+    isVideoMotionActive
   } = usePlayer();
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [slotRect, setSlotRect] = useState<SlotRect | null>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
 
   const isDirectAudio = Boolean(currentSong && (currentSong.source === 'audio' || currentSong.audioUrl));
   const isEmbeddedInAlbumArt = Boolean(
@@ -51,6 +53,7 @@ export const VideoPlayerDock: React.FC = () => {
     }
 
     const updateRect = () => {
+      if (isVideoMotionActive) return;
       const r = videoSlotElement.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) {
         setSlotRect({
@@ -75,7 +78,38 @@ export const VideoPlayerDock: React.FC = () => {
       window.removeEventListener('resize', updateRect);
       window.removeEventListener('scroll', updateRect, true);
     };
-  }, [isEmbeddedInAlbumArt, videoSlotElement]);
+  }, [isEmbeddedInAlbumArt, videoSlotElement, isVideoMotionActive]);
+
+  // Follow the album art slot at 60fps via transform during swipe-down drag and snap/close animations
+  useEffect(() => {
+    const dockEl = dockRef.current;
+    if (!dockEl) return;
+
+    if (!isEmbeddedInAlbumArt || !isVideoMotionActive || !videoSlotElement || !slotRect) {
+      dockEl.style.transform = '';
+      dockEl.style.transformOrigin = '';
+      return;
+    }
+
+    let rafId = 0;
+    const syncFrame = () => {
+      const r = videoSlotElement.getBoundingClientRect();
+      const dx = r.left - slotRect.left;
+      const dy = r.top - slotRect.top;
+      const sx = slotRect.width > 0 ? r.width / slotRect.width : 1;
+      const sy = slotRect.height > 0 ? r.height / slotRect.height : 1;
+      dockEl.style.transformOrigin = 'top left';
+      dockEl.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(${sx}, ${sy})`;
+      rafId = requestAnimationFrame(syncFrame);
+    };
+
+    rafId = requestAnimationFrame(syncFrame);
+    return () => {
+      cancelAnimationFrame(rafId);
+      dockEl.style.transform = '';
+      dockEl.style.transformOrigin = '';
+    };
+  }, [isEmbeddedInAlbumArt, isVideoMotionActive, videoSlotElement, slotRect]);
 
   const isVisible = Boolean((isEmbeddedInAlbumArt && slotRect) || isFloatingPopup);
 
@@ -115,12 +149,14 @@ export const VideoPlayerDock: React.FC = () => {
           top: slotRect.top,
           left: slotRect.left,
           width: slotRect.width,
-          height: slotRect.height
+          height: slotRect.height,
+          willChange: isVideoMotionActive ? 'transform' : undefined
         }
       : undefined;
 
   return (
     <div
+      ref={dockRef}
       style={embeddedStyle}
       className={cn(
         'select-none',
@@ -129,7 +165,7 @@ export const VideoPlayerDock: React.FC = () => {
         !isVisible
           ? 'fixed -left-[9999px] -top-[9999px] w-[1px] h-[1px] opacity-0 pointer-events-none overflow-hidden z-[-1]'
           : isEmbeddedInAlbumArt
-          ? 'fixed rounded-3xl overflow-hidden shadow-2xl bg-black border border-[var(--border-color)] z-[45] group'
+          ? 'fixed rounded-3xl overflow-hidden shadow-2xl bg-black border border-[var(--border-color)] z-[45] group pointer-events-none'
           // When floating and expanded: larger floating video player
           : isExpanded
           ? 'fixed bottom-24 right-4 md:right-8 w-72 h-44 sm:w-80 sm:h-48 md:w-96 md:h-56 rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-color)] bg-black flex flex-col glow-accent-sm z-40'
@@ -219,7 +255,7 @@ export const VideoPlayerDock: React.FC = () => {
           <button
             type="button"
             onClick={toggleVideo}
-            className="absolute top-3 right-3 z-20 px-3 py-1.5 rounded-xl backdrop-blur-md border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)] cursor-pointer"
+            className="pointer-events-auto absolute top-3 right-3 z-20 px-3 py-1.5 rounded-xl backdrop-blur-md border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all bg-[var(--accent)] text-black hover:bg-[var(--accent-hover)] cursor-pointer"
             title="Switch to photo view"
           >
             <ImageIcon className="w-3.5 h-3.5" />

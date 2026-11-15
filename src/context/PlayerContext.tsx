@@ -32,6 +32,8 @@ interface PlayerContextType {
   toggleVideo: () => void;
   videoSlotElement: HTMLElement | null;
   setVideoSlotElement: (el: HTMLElement | null) => void;
+  isVideoMotionActive: boolean;
+  setIsVideoMotionActive: (active: boolean) => void;
   isLoading: boolean;
   connectionError: string | null;
   retryCurrentSong: () => void;
@@ -120,6 +122,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
   const [videoSlotElement, setVideoSlotElement] = useState<HTMLElement | null>(null);
+  const [isVideoMotionActive, setIsVideoMotionActive] = useState<boolean>(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -1354,6 +1357,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleVideo,
         videoSlotElement,
         setVideoSlotElement,
+        isVideoMotionActive,
+        setIsVideoMotionActive,
         isLoading,
         connectionError,
         retryCurrentSong,
