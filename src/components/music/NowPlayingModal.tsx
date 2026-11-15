@@ -369,7 +369,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
       {/* Sliding / Scaling Player Sheet */}
       <div
         ref={sheetRef}
-        className="relative flex flex-col w-full h-full will-change-transform origin-center"
+        className="relative flex flex-col w-full h-[100dvh] max-h-[100dvh] will-change-transform origin-center"
       >
         {/* Top Header Bar (Drag Handle) */}
         <div
@@ -442,20 +442,25 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
         </div>
 
         {/* Main Tab Content */}
-        <div className="flex-1 overflow-hidden p-4 md:p-8 flex flex-col justify-center max-w-4xl mx-auto w-full">
+        <div
+          className={cn(
+            'flex-1 min-h-0 px-4 py-3 md:p-8 flex flex-col max-w-4xl mx-auto w-full',
+            activeTab === 'track' ? 'overflow-y-auto' : 'overflow-hidden justify-center'
+          )}
+        >
           {activeTab === 'track' && (
-            <div className="flex flex-col items-center justify-center max-w-md mx-auto w-full">
+            <div className="my-auto flex flex-col items-center justify-center max-w-md mx-auto w-full">
               {/* Top Area + Big Artwork / Embedded Video Container (Drag Handle) */}
               <div
                 data-drag-handle="top-area"
                 style={{ touchAction: 'none' }}
-                className="w-full flex justify-center mb-8"
+                className="w-full flex justify-center mb-4 sm:mb-7 shrink-0"
               >
                 <div
                   ref={albumArtRef}
                   data-drag-handle="album-art"
                   style={{ touchAction: 'none' }}
-                  className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-3xl overflow-hidden shadow-2xl bg-[var(--surface-secondary)] border border-[var(--border-color)] group"
+                  className="relative w-[min(16rem,34dvh,72vw)] sm:w-[min(20rem,38dvh,72vw)] aspect-square rounded-3xl overflow-hidden shadow-2xl bg-[var(--surface-secondary)] border border-[var(--border-color)] group"
                 >
                   <img
                     src={currentSong.thumbnail}
@@ -494,29 +499,46 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
                 </div>
               </div>
 
-              {/* Song Meta & Like */}
-              <div className="flex items-center justify-between w-full mb-6">
-                <div className="min-w-0 flex-1 pr-4">
-                  <h2 className="text-xl sm:text-2xl font-bold truncate tracking-tight text-[var(--text-primary)]">
+              {/* Song Meta, Video Toggle, Add to Playlist & Like */}
+              <div className="flex items-center justify-between w-full mb-3 sm:mb-5 gap-2">
+                <div className="min-w-0 flex-1 pr-1">
+                  <h2 className="text-lg sm:text-2xl font-bold truncate tracking-tight text-[var(--text-primary)]">
                     {currentSong.title}
                   </h2>
-                  <p className="text-sm sm:text-base text-[var(--text-secondary)] truncate mt-1">
+                  <p className="text-sm sm:text-base text-[var(--text-secondary)] truncate mt-0.5">
                     <ArtistLinks artist={currentSong.artist} className="text-sm sm:text-base text-[var(--text-secondary)] truncate block" />
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
+                    type="button"
+                    onClick={toggleVideo}
+                    aria-pressed={isVideoOpen}
+                    aria-label={isVideoOpen ? 'Switch to photo view' : 'Switch to video view'}
+                    title={isVideoOpen ? 'Switch to photo view' : 'Switch to video view'}
+                    className={cn(
+                      'min-w-[44px] min-h-[44px] px-3 py-2 rounded-full border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer',
+                      isVideoOpen
+                        ? 'bg-[var(--accent)] text-black border-[var(--accent)] shadow-sm'
+                        : 'bg-transparent text-[var(--accent)] border-[var(--accent)]/60 hover:bg-[var(--accent)]/15'
+                    )}
+                  >
+                    <Tv className="w-4 h-4 shrink-0" />
+                    <span>Video</span>
+                  </button>
+                  <button
                     onClick={() => setAddToPlaylistTarget(currentSong)}
                     title="Add to playlist"
                     aria-label="Add to playlist"
-                    className="p-3 rounded-full text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer"
                   >
                     <FolderPlus className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => toggleLike(currentSong)}
+                    aria-label={liked ? 'Remove from liked songs' : 'Like song'}
                     className={cn(
-                      'p-3 rounded-full hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer',
+                      'min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-[var(--surface-elevated)] transition-colors cursor-pointer',
                       liked ? 'text-red-500' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                     )}
                   >
@@ -526,7 +548,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
               </div>
 
               {/* Seek Bar */}
-              <div className="w-full space-y-2 mb-6">
+              <div className="w-full space-y-1.5 mb-3 sm:mb-5">
                 <div className="relative flex items-center group cursor-pointer py-2">
                   <input
                     type="range"
@@ -547,7 +569,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
               </div>
 
               {/* Controls */}
-              <div className="flex items-center justify-between w-full mb-6">
+              <div className="flex items-center justify-between w-full mb-3 sm:mb-5">
                 {/* Shuffle */}
                 <button
                   onClick={toggleShuffle}
@@ -572,7 +594,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
                 {/* Play / Pause with Accent Glow */}
                 <button
                   onClick={togglePlay}
-                  className="w-16 h-16 rounded-full bg-[var(--accent)] text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all glow-accent"
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[var(--accent)] text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all glow-accent"
                   title={isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
                   aria-label={isLoading ? 'Loading song' : isPlaying ? 'Pause song' : 'Play song'}
                 >
@@ -608,7 +630,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
               </div>
 
               {/* Volume & Quality Bottom Bar */}
-              <div className="flex items-center justify-between w-full pt-4 border-t border-[var(--border-color)]">
+              <div className="flex items-center justify-between w-full pt-3 sm:pt-4 border-t border-[var(--border-color)]">
                 {/* Volume Slider */}
                 <div className="flex items-center gap-2 max-w-[160px] w-full">
                   <button
