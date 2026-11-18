@@ -31,8 +31,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({
   onOpenShortcuts,
   onNavigate
 }) => {
-  const { user, logout, setShowAuthModal, maxGuestSearches } = useUser();
-  const { updateUsername } = useAuth();
+  const { user, logout, setShowAuthModal, maxGuestSearches, updateDisplayName } = useUser();
   const { likedSongs, history, queue } = useQueue();
   const { myPlaylists, syncLocalDataToCloud, isSyncingToCloud } = usePlaylists();
   const { theme } = useTheme();
@@ -59,7 +58,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({
     e.preventDefault();
     if (!usernameInput.trim()) return;
     setSavingName(true);
-    const res = await updateUsername(usernameInput.trim());
+    const res = await updateDisplayName(usernameInput.trim());
     setSavingName(false);
     if (!res.error) {
       setEditingUsername(false);
@@ -95,7 +94,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({
             </div>
 
             <div className="min-w-0 flex-1">
-              {editingUsername && !user.isGuest ? (
+              {editingUsername ? (
                 <form onSubmit={handleSaveUsername} className="flex items-center gap-1.5">
                   <input
                     type="text"
@@ -131,18 +130,16 @@ export const AccountPage: React.FC<AccountPageProps> = ({
                   <h2 className="text-base font-bold text-[var(--text-primary)] truncate">
                     {user.displayName}
                   </h2>
-                  {!user.isGuest && (
-                    <button
-                      onClick={() => {
-                        setUsernameInput(user.displayName);
-                        setEditingUsername(true);
-                      }}
-                      title="Edit username"
-                      className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setUsernameInput(user.displayName);
+                      setEditingUsername(true);
+                    }}
+                    title="Edit display name"
+                    className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               )}
 

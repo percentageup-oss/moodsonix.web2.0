@@ -100,7 +100,12 @@ export const HomePage: React.FC<HomePageProps> = ({
             // MOOD-DRIVEN STREAMING
           </span>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[var(--text-primary)] mt-1">
-            {getGreeting()}{user.displayName ? `, ${user.displayName}` : ''}
+            {getGreeting()}
+            {user.displayName ? (
+              <>
+                , <span className="text-[var(--accent)]">{user.displayName}</span>
+              </>
+            ) : null}
           </h1>
           <p className="text-xs md:text-sm text-[var(--text-secondary)] mt-1">
             What frequency are you tuning into today?

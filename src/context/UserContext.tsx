@@ -10,16 +10,18 @@ interface UserContextType {
   showAuthModal: boolean;
   setShowAuthModal: (show: boolean) => void;
   maxGuestSearches: number;
+  updateDisplayName: (name: string) => Promise<{ error?: string }>;
 }
 
 const GUEST_SEARCH_LIMIT = 25;
 const GUEST_SEARCHES_KEY = 'moodsonix_guest_searches';
 const GUEST_ID_KEY = 'moodsonix_guest_id';
+const GUEST_NAME_KEY = 'moodsonix_guest_name';
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { authUser, profile, isGuest, signOut, showAuthModal, setShowAuthModal } = useAuth();
+  const { authUser, profile, isGuest, signOut, showAuthModal, setShowAuthModal, updateUsername } = useAuth();
 
   const [guestId] = useState<string>(() => {
     const existing = localStorage.getItem(GUEST_ID_KEY);
@@ -27,6 +29,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const next = 'guest_' + Math.random().toString(36).substring(2, 9);
     localStorage.setItem(GUEST_ID_KEY, next);
     return next;
+  });
+
+  const [guestName, setGuestName] = useState<string>(() => {
+    const saved = localStorage.getItem(GUEST_NAME_KEY);
+    return saved && saved.trim() ? saved.trim() : 'Guest Explorer';
   });
 
   const [guestSearches, setGuestSearches] = useState<number>(() => {
@@ -44,7 +51,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const displayName =
         profile?.username ||
         authUser.user_metadata?.username ||
+        authUser.user_metadata?.display_name ||
         authUser.user_metadata?.full_name ||
+        authUser.user_metadata?.name ||
         (authUser.email ? authUser.email.split('@')[0] : 'Listener');
 
       return {
@@ -59,12 +68,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       id: guestId,
-      displayName: 'Guest Explorer',
+      displayName: guestName || 'Guest Explorer',
       email: '',
       isGuest: true,
       searchesCount: guestSearches
     };
-  }, [authUser, profile, isGuest, guestId, guestSearches]);
+  }, [authUser, profile, isGuest, guestId, guestName, guestSearches]);
 
   const isLimitReached = user.isGuest && guestSearches >= GUEST_SEARCH_LIMIT;
 
@@ -76,6 +85,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setGuestSearches((prev) => prev + 1);
     return true;
+  };
+
+  const updateDisplayName = async (name: string): Promise<{ error?: string }> => {
+    const clean = name.trim();
+    if (!clean) return { error: 'Name cannot be empty' };
+    if (authUser && !isGuest) {
+      return updateUsername(clean);
+    }
+    localStorage.setItem(GUEST_NAME_KEY, clean);
+    setGuestName(clean);
+    return {};
   };
 
   const logout = () => {
@@ -91,7 +111,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLimitReached,
         showAuthModal,
         setShowAuthModal,
-        maxGuestSearches: GUEST_SEARCH_LIMIT
+        maxGuestSearches: GUEST_SEARCH_LIMIT,
+        updateDisplayName
       }}
     >
       {children}
