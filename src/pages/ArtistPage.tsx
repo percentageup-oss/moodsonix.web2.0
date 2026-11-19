@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchArtistProfile, itunesSongToMoodsonixSong, upscaleArtwork } from '../services/itunesApi';
+import { invalidateCachedArtistImage } from '../services/artistImage';
 import { searchMusic } from '../services/musicApi';
 import { ArtistProfileData, ItunesAlbum, ItunesSong } from '../types/artist';
 import { Song } from '../types/music';
@@ -54,6 +55,7 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isProcessingPlay, setIsProcessingPlay] = useState<boolean>(false);
   const [selectedAlbum, setSelectedAlbum] = useState<ItunesAlbum | null>(null);
+  const [avatarError, setAvatarError] = useState<boolean>(false);
 
   const loadData = () => {
     setIsLoading(true);
@@ -83,11 +85,16 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({
   };
 
   useEffect(() => {
+    setAvatarError(false);
     const cleanup = loadData();
     return () => {
       if (cleanup) cleanup();
     };
   }, [artistIdOrName]);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [profile?.avatarUrl]);
 
   const artistIdentifier = profile ? profile.artist.artistId : artistIdOrName;
   const artistName = profile?.artist.artistName || initialArtistName || String(artistIdOrName);
@@ -98,7 +105,7 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({
     toggleFollowArtist({
       id: String(profile.artist.artistId || profile.artist.artistName),
       name: profile.artist.artistName,
-      avatarUrl: profile.avatarUrl || profile.topArtwork || undefined,
+      avatarUrl: profile.avatarUrl && !avatarError ? profile.avatarUrl : undefined,
       genre: profile.artist.primaryGenreName,
       monthlyListeners: profile.monthlyListeners,
       followedAt: Date.now()
@@ -292,15 +299,20 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({
             <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-end gap-5">
               {/* Round Avatar */}
               <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden shrink-0 border-2 border-[var(--accent)]/50 shadow-2xl bg-[var(--surface-elevated)] group">
-                {profile.avatarUrl || profile.topArtwork ? (
+                {profile.avatarUrl && !avatarError ? (
                   <img
-                    src={profile.avatarUrl || profile.topArtwork || ''}
+                    src={profile.avatarUrl}
                     alt={profile.artist.artistName}
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      invalidateCachedArtistImage(profile.artist.artistName);
+                      setAvatarError(true);
+                    }}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-900 to-purple-950 text-[var(--accent)] font-mono font-bold text-3xl">
-                    {profile.artist.artistName.charAt(0)}
+                    {profile.artist.artistName.charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="absolute inset-0 rounded-full ring-2 ring-inset ring-white/10" />
@@ -697,11 +709,16 @@ export const ArtistPage: React.FC<ArtistPageProps> = ({
             </h2>
 
             <div className="p-6 rounded-3xl bg-[var(--surface)] border border-[var(--border-color)] flex flex-col md:flex-row items-center md:items-start gap-6">
-              {profile.avatarUrl && (
+              {profile.avatarUrl && !avatarError && (
                 <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden shrink-0 border border-white/10 shadow-lg">
                   <img
                     src={profile.avatarUrl}
                     alt={profile.artist.artistName}
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      invalidateCachedArtistImage(profile.artist.artistName);
+                      setAvatarError(true);
+                    }}
                     className="w-full h-full object-cover"
                   />
                 </div>

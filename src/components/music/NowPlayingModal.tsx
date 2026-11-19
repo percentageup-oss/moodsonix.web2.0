@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
 import { usePlaylists } from '../../context/PlaylistContext';
@@ -69,7 +69,13 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
     isVideoOpen,
     toggleVideo,
     setVideoSlotElement,
-    setIsVideoMotionActive
+    setIsVideoMotionActive,
+    setIsNowPlayingOpen,
+    isNowPlayingDraggingOpen,
+    setIsNowPlayingDraggingOpen,
+    nowPlayingDragUpPxRef,
+    nowPlayingOpenFromDragRef,
+    nowPlayingSheetControlsRef
   } = usePlayer();
 
   const { queue, toggleLike, isLiked } = useQueue();
@@ -77,12 +83,14 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
   const [activeTab, setActiveTab] = useState<'track' | 'lyrics' | 'queue'>('track');
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isOpeningAnim, setIsOpeningAnim] = useState(false);
 
   const albumArtRef = useRef<HTMLDivElement | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasRecentlyDraggingRef = useRef<boolean>(false);
+  const prevIsOpenRef = useRef<boolean>(isOpen);
 
   const gestureRef = useRef<{
     pointerId: number | null;
@@ -110,7 +118,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
     samples: []
   });
 
-  const isTrackTabVisible = isOpen && Boolean(currentSong) && activeTab === 'track';
+  const isTrackTabVisible = isOpen && !isOpeningAnim && Boolean(currentSong) && activeTab === 'track';
 
   useEffect(() => {
     if (isTrackTabVisible && albumArtRef.current) {
@@ -128,48 +136,6 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
     }
   }, []);
 
-  // Close on Escape key (desktop-friendly shortcut)
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (showQualityMenu) {
-          setShowQualityMenu(false);
-        } else {
-          onClose();
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, showQualityMenu, onClose]);
-
-  // Reset transform & backdrop opacity cleanly whenever the modal opens or closes
-  useEffect(() => {
-    clearAnimTimer();
-    gestureRef.current.pointerId = null;
-    gestureRef.current.eligible = false;
-    gestureRef.current.active = false;
-    gestureRef.current.captured = false;
-    gestureRef.current.currentDragY = 0;
-    setIsDragging(false);
-    setIsVideoMotionActive(false);
-
-    if (sheetRef.current) {
-      sheetRef.current.style.transition = '';
-      sheetRef.current.style.transform = '';
-    }
-    if (backdropRef.current) {
-      backdropRef.current.style.transition = '';
-      backdropRef.current.style.opacity = '';
-    }
-
-    return () => {
-      clearAnimTimer();
-      setIsVideoMotionActive(false);
-    };
-  }, [isOpen, clearAnimTimer, setIsVideoMotionActive]);
-
   const applyDragVisuals = useCallback((dragY: number) => {
     const sheet = sheetRef.current;
     const backdrop = backdropRef.current;
@@ -184,9 +150,234 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
     }
     if (backdrop) {
       backdrop.style.transition = 'none';
-      backdrop.style.opacity = String(Math.max(0.15, 1 - progress * 0.85));
+      backdrop.style.opacity = String(Math.max(0, 1 - progress));
     }
   }, []);
+
+  const requestAnimatedClose = useCallback(() => {
+    clearAnimTimer();
+    const viewportH = Math.max(window.innerHeight || 800, 1);
+    const sheet = sheetRef.current;
+    const backdrop = backdropRef.current;
+
+    if (!sheet && !backdrop) {
+      setIsVideoMotionActive(false);
+      onClose();
+      return;
+    }
+
+    setIsVideoMotionActive(true);
+    if (sheet) {
+      sheet.style.transition = `transform ${CLOSE_ANIM_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+      sheet.style.transform = `translate3d(0, ${viewportH}px, 0) scale(0.95)`;
+    }
+    if (backdrop) {
+      backdrop.style.transition = `opacity ${CLOSE_ANIM_MS}ms ease-out`;
+      backdrop.style.opacity = '0';
+    }
+    animTimerRef.current = setTimeout(() => {
+      animTimerRef.current = null;
+      setIsVideoMotionActive(false);
+      onClose();
+    }, CLOSE_ANIM_MS);
+  }, [clearAnimTimer, onClose, setIsVideoMotionActive]);
+
+  // Close on Escape key (desktop-friendly shortcut)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showQualityMenu) {
+          setShowQualityMenu(false);
+        } else {
+          requestAnimatedClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, showQualityMenu, requestAnimatedClose]);
+
+  // Register live swipe-up controls so PlayerBar can drive the sheet at 60fps
+  useEffect(() => {
+    nowPlayingSheetControlsRef.current = {
+      updateDrag: (dragUpPx: number) => {
+        const viewportH = Math.max(window.innerHeight || 800, 1);
+        const offsetY = Math.max(0, viewportH - Math.max(0, dragUpPx));
+        applyDragVisuals(offsetY);
+      },
+      finishDrag: (shouldOpen: boolean, _dragUpPx: number) => {
+        clearAnimTimer();
+        const viewportH = Math.max(window.innerHeight || 800, 1);
+        const sheet = sheetRef.current;
+        const backdrop = backdropRef.current;
+
+        if (shouldOpen) {
+          nowPlayingOpenFromDragRef.current = true;
+          setIsOpeningAnim(true);
+          setIsNowPlayingOpen(true);
+
+          if (sheet) {
+            sheet.style.transition = `transform ${CLOSE_ANIM_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+            sheet.style.transform = 'translate3d(0, 0, 0) scale(1)';
+          }
+          if (backdrop) {
+            backdrop.style.transition = `opacity ${CLOSE_ANIM_MS}ms ease-out`;
+            backdrop.style.opacity = '1';
+          }
+
+          animTimerRef.current = setTimeout(() => {
+            animTimerRef.current = null;
+            if (sheetRef.current) {
+              sheetRef.current.style.transition = '';
+              sheetRef.current.style.transform = '';
+            }
+            if (backdropRef.current) {
+              backdropRef.current.style.transition = '';
+              backdropRef.current.style.opacity = '';
+            }
+            nowPlayingOpenFromDragRef.current = false;
+            setIsNowPlayingDraggingOpen(false);
+            setIsOpeningAnim(false);
+          }, CLOSE_ANIM_MS);
+        } else {
+          if (sheet) {
+            sheet.style.transition = `transform ${CLOSE_ANIM_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+            sheet.style.transform = `translate3d(0, ${viewportH}px, 0) scale(0.95)`;
+          }
+          if (backdrop) {
+            backdrop.style.transition = `opacity ${CLOSE_ANIM_MS}ms ease-out`;
+            backdrop.style.opacity = '0';
+          }
+
+          animTimerRef.current = setTimeout(() => {
+            animTimerRef.current = null;
+            if (sheetRef.current) {
+              sheetRef.current.style.transition = '';
+              sheetRef.current.style.transform = '';
+            }
+            if (backdropRef.current) {
+              backdropRef.current.style.transition = '';
+              backdropRef.current.style.opacity = '';
+            }
+            setIsNowPlayingDraggingOpen(false);
+          }, CLOSE_ANIM_MS);
+        }
+      }
+    };
+
+    return () => {
+      nowPlayingSheetControlsRef.current = null;
+    };
+  }, [
+    applyDragVisuals,
+    clearAnimTimer,
+    nowPlayingOpenFromDragRef,
+    nowPlayingSheetControlsRef,
+    setIsNowPlayingDraggingOpen,
+    setIsNowPlayingOpen
+  ]);
+
+  // Synchronize opening/closing/drag-open initial positions cleanly before paint
+  useLayoutEffect(() => {
+    const wasOpen = prevIsOpenRef.current;
+    prevIsOpenRef.current = isOpen;
+
+    // Starting a swipe-up drag from PlayerBar while still closed: position at current drag height immediately
+    if (!isOpen && isNowPlayingDraggingOpen) {
+      const viewportH = Math.max(window.innerHeight || 800, 1);
+      const offsetY = Math.max(0, viewportH - Math.max(0, nowPlayingDragUpPxRef.current));
+      applyDragVisuals(offsetY);
+      return;
+    }
+
+    // Transitioned from closed -> open via tap/click (not drag): play consistent slide-up animation
+    if (isOpen && !wasOpen && !nowPlayingOpenFromDragRef.current) {
+      clearAnimTimer();
+      gestureRef.current.pointerId = null;
+      gestureRef.current.eligible = false;
+      gestureRef.current.active = false;
+      gestureRef.current.captured = false;
+      gestureRef.current.currentDragY = 0;
+      setIsDragging(false);
+      setIsVideoMotionActive(false);
+
+      const viewportH = Math.max(window.innerHeight || 800, 1);
+      const sheet = sheetRef.current;
+      const backdrop = backdropRef.current;
+
+      if (sheet) {
+        sheet.style.transition = 'none';
+        sheet.style.transform = `translate3d(0, ${viewportH}px, 0) scale(0.95)`;
+      }
+      if (backdrop) {
+        backdrop.style.transition = 'none';
+        backdrop.style.opacity = '0';
+      }
+
+      setIsOpeningAnim(true);
+      if (sheet) void sheet.offsetHeight;
+
+      if (sheet) {
+        sheet.style.transition = `transform ${CLOSE_ANIM_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        sheet.style.transform = 'translate3d(0, 0, 0) scale(1)';
+      }
+      if (backdrop) {
+        backdrop.style.transition = `opacity ${CLOSE_ANIM_MS}ms ease-out`;
+        backdrop.style.opacity = '1';
+      }
+
+      animTimerRef.current = setTimeout(() => {
+        animTimerRef.current = null;
+        if (sheetRef.current) {
+          sheetRef.current.style.transition = '';
+          sheetRef.current.style.transform = '';
+        }
+        if (backdropRef.current) {
+          backdropRef.current.style.transition = '';
+          backdropRef.current.style.opacity = '';
+        }
+        setIsOpeningAnim(false);
+      }, CLOSE_ANIM_MS);
+      return;
+    }
+
+    // Closed externally
+    if (!isOpen && !isNowPlayingDraggingOpen) {
+      clearAnimTimer();
+      gestureRef.current.pointerId = null;
+      gestureRef.current.eligible = false;
+      gestureRef.current.active = false;
+      gestureRef.current.captured = false;
+      gestureRef.current.currentDragY = 0;
+      setIsDragging(false);
+      setIsOpeningAnim(false);
+      setIsVideoMotionActive(false);
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = '';
+        sheetRef.current.style.transform = '';
+      }
+      if (backdropRef.current) {
+        backdropRef.current.style.transition = '';
+        backdropRef.current.style.opacity = '';
+      }
+    }
+  }, [
+    isOpen,
+    isNowPlayingDraggingOpen,
+    applyDragVisuals,
+    clearAnimTimer,
+    nowPlayingDragUpPxRef,
+    nowPlayingOpenFromDragRef,
+    setIsVideoMotionActive
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearAnimTimer();
+      setIsVideoMotionActive(false);
+    };
+  }, [clearAnimTimer, setIsVideoMotionActive]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -403,7 +594,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
     [onClose, setIsVideoMotionActive]
   );
 
-  if (!isOpen || !currentSong) return null;
+  if ((!isOpen && !isNowPlayingDraggingOpen) || !currentSong) return null;
 
   const liked = isLiked(currentSong.id);
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -413,14 +604,17 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
 
   return (
     <div
-      className="fixed inset-0 z-[42] flex items-center justify-center md:p-4 text-[var(--text-primary)] select-none"
+      className={cn(
+        'fixed inset-0 z-[42] flex items-center justify-center md:p-4 text-[var(--text-primary)] select-none',
+        !isOpen && isNowPlayingDraggingOpen && 'pointer-events-none'
+      )}
     >
       {/* Dimmed Backdrop Layer (fades during drag, click outside player closes on desktop) */}
       <div
         ref={backdropRef}
         onClick={() => {
-          if (!wasRecentlyDraggingRef.current) {
-            onClose();
+          if (isOpen && !wasRecentlyDraggingRef.current) {
+            requestAnimatedClose();
           }
         }}
         className="absolute inset-0 bg-black/80 md:bg-black/75 backdrop-blur-2xl will-change-[opacity] cursor-pointer"
@@ -455,7 +649,7 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ isOpen, onClos
 
           <div className="flex items-center justify-between px-5 sm:px-6 py-2.5 md:py-3.5">
             <button
-              onClick={onClose}
+              onClick={requestAnimatedClose}
               className="p-2 -ml-2 rounded-full hover:bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-white transition-colors cursor-pointer"
               title="Minimize player (Esc)"
               aria-label="Minimize player"

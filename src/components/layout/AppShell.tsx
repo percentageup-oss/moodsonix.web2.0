@@ -17,6 +17,7 @@ import { ToastContainer } from '../common/ToastContainer';
 import { OfflineBanner } from '../common/OfflineBanner';
 import { WelcomeSplash } from '../common/WelcomeSplash';
 import { Song } from '../../types/music';
+import { safeJsonResponse } from '../../services/musicApi';
 
 // Pages
 import { HomePage } from '../../pages/HomePage';
@@ -220,7 +221,11 @@ export const AppShell: React.FC = () => {
     cueSong(fallbackSong);
 
     fetch(`/api/song/${encodeURIComponent(sharedId)}`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const { data, isJson } = await safeJsonResponse<Song>(res);
+        return isJson ? data : null;
+      })
       .then((songData) => {
         if (songData && songData.id) {
           cueSong(songData);

@@ -27,6 +27,14 @@ interface PlayerContextType {
   effectiveQuality: string;
   isNowPlayingOpen: boolean;
   setIsNowPlayingOpen: (open: boolean) => void;
+  isNowPlayingDraggingOpen: boolean;
+  setIsNowPlayingDraggingOpen: (dragging: boolean) => void;
+  nowPlayingDragUpPxRef: React.MutableRefObject<number>;
+  nowPlayingOpenFromDragRef: React.MutableRefObject<boolean>;
+  nowPlayingSheetControlsRef: React.MutableRefObject<{
+    updateDrag: (dragUpPx: number) => void;
+    finishDrag: (shouldOpen: boolean, dragUpPx: number) => void;
+  } | null>;
   isVideoOpen: boolean;
   setIsVideoOpen: (open: boolean) => void;
   toggleVideo: () => void;
@@ -114,6 +122,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Re-render when the connection type changes so "Auto" can switch between Wi-Fi and mobile-data behaviour
   const [, setNetTick] = useState<number>(0);
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
+  const [isNowPlayingDraggingOpen, setIsNowPlayingDraggingOpen] = useState<boolean>(false);
+  const nowPlayingDragUpPxRef = useRef<number>(0);
+  const nowPlayingOpenFromDragRef = useRef<boolean>(false);
+  const nowPlayingSheetControlsRef = useRef<{
+    updateDrag: (dragUpPx: number) => void;
+    finishDrag: (shouldOpen: boolean, dragUpPx: number) => void;
+  } | null>(null);
   const [isVideoOpen, setIsVideoOpen] = useState<boolean>(() => {
     try {
       return localStorage.getItem('moodsonix_video_toggle') === 'true';
@@ -1352,6 +1367,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         effectiveQuality,
         isNowPlayingOpen,
         setIsNowPlayingOpen,
+        isNowPlayingDraggingOpen,
+        setIsNowPlayingDraggingOpen,
+        nowPlayingDragUpPxRef,
+        nowPlayingOpenFromDragRef,
+        nowPlayingSheetControlsRef,
         isVideoOpen,
         setIsVideoOpen: handleSetIsVideoOpen,
         toggleVideo,

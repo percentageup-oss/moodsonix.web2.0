@@ -1,9 +1,12 @@
-import type { Request, Response } from 'express';
 import { Innertube, UniversalCache, Log, Parser } from 'youtubei.js';
 
 try {
   Parser.setParserErrorHandler((context: any) => {
-    if (context?.error_type === 'class_not_found' || context?.classname === 'ListView' || context?.classname === 'ListItemView') {
+    if (
+      context?.error_type === 'class_not_found' ||
+      context?.classname === 'ListView' ||
+      context?.classname === 'ListItemView'
+    ) {
       return;
     }
   });
@@ -41,134 +44,173 @@ const PIPED_INSTANCES = [
   'https://piped-api.lunar.icu'
 ];
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Request timed out')), ms);
+    promise.then(
+      (val) => {
+        clearTimeout(timer);
+        resolve(val);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 async function searchPiped(query: string) {
   for (const instance of PIPED_INSTANCES) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
     try {
-      const res = await fetch(`${instance}/search?q=${encodeURIComponent(query)}&filter=music_songs`, {
-        headers: { 'User-Agent': 'Moodsonix/2.0' }
-      });
+      const res = await fetch(
+        `${instance}/search?q=${encodeURIComponent(query)}&filter=music_songs`,
+        {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'Moodsonix/2.0', Accept: 'application/json' }
+        }
+      );
       if (!res.ok) continue;
-      const data = await res.json();
+      const text = await res.text();
+      if (!text || !text.trim().startsWith('{')) continue;
+      const data = JSON.parse(text);
       if (!Array.isArray(data.items)) continue;
 
-      return data.items.slice(0, 25).map((item: any) => ({
-        id: item.url ? item.url.replace('/watch?v=', '') : item.id || '',
-        source: 'youtube' as const,
-        title: item.title || 'Unknown Title',
-        artist: item.uploaderName || item.channel || 'Unknown Artist',
-        channel: item.uploaderName || 'Unknown Channel',
-        album: null,
-        thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${item.url ? item.url.replace('/watch?v=', '') : item.id}/hqdefault.jpg`,
-        duration: item.duration || 180,
-        url: `https://www.youtube.com/watch?v=${item.url ? item.url.replace('/watch?v=', '') : item.id}`,
-        isPlayable: true
-      }));
+      return data.items.slice(0, 25).map((item: any) => {
+        const vidId = item.url ? item.url.replace('/watch?v=', '') : item.id || '';
+        return {
+          id: vidId,
+          source: 'youtube' as const,
+          title: item.title || 'Unknown Title',
+          artist: item.uploaderName || item.channel || 'Unknown Artist',
+          channel: item.uploaderName || 'Unknown Channel',
+          album: null,
+          thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`,
+          duration: item.duration || 180,
+          url: `https://www.youtube.com/watch?v=${vidId}`,
+          isPlayable: true
+        };
+      });
     } catch {
       // Continue
+    } finally {
+      clearTimeout(timer);
     }
   }
   return [];
 }
 
 export default async function handler(req: any, res: any) {
-  // Enable CORS
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
-
-  const query = (req.query?.q as string || '').trim();
-  if (!query) {
-    return res.status(200).json({ query: '', results: [], count: 0 });
-  }
-
-  const songs: any[] = [];
 
   try {
-    const yt = await getInnertube();
-    const searchRes = await yt.music.search(query, { type: 'song' });
-    const contents: any[] = (searchRes as any).contents || [];
-
-    for (const item of contents) {
-      const itemId = item?.id || item?.video_id;
-      if (!itemId) continue;
-
-      const title = item.title?.toString() || item.name || 'Unknown Song';
-      let artist = 'Unknown Artist';
-      if (item.artists && Array.isArray(item.artists) && item.artists.length > 0) {
-        artist = item.artists.map((a: any) => a.name).join(', ');
-      } else if (item.author?.name) {
-        artist = item.author.name;
-      }
-
-      const album = item.album?.name || null;
-      let duration = 180;
-      if (item.duration?.seconds) {
-        duration = item.duration.seconds;
-      } else if (typeof item.duration === 'number') {
-        duration = item.duration;
-      }
-
-      let thumbnail = `https://i.ytimg.com/vi/${itemId}/hqdefault.jpg`;
-      if (item.thumbnails && item.thumbnails.length > 0) {
-        thumbnail = item.thumbnails[item.thumbnails.length - 1].url;
-      }
-
-      songs.push({
-        id: itemId,
-        source: 'youtube',
-        title,
-        artist,
-        channel: artist,
-        album,
-        thumbnail,
-        duration,
-        url: `https://www.youtube.com/watch?v=${itemId}`,
-        isPlayable: true
-      });
+    const query = String(req.query?.q || '').trim();
+    if (!query) {
+      return res.status(200).json({ query: '', results: [], count: 0 });
     }
 
-    if (songs.length < 3) {
-      const generalSearch = await yt.search(query + ' audio', { type: 'video' });
-      const videos: any[] = (generalSearch as any).videos || [];
-      for (const v of videos) {
-        const vidId = v?.id || v?.video_id;
-        if (!vidId || songs.some(s => s.id === vidId)) continue;
+    const songs: any[] = [];
+
+    try {
+      const yt = await withTimeout(getInnertube(), 4500);
+      const searchRes = await withTimeout(yt.music.search(query, { type: 'song' }), 4500);
+      const contents: any[] = (searchRes as any).contents || [];
+
+      for (const item of contents) {
+        const itemId = item?.id || item?.video_id;
+        if (!itemId) continue;
+
+        const title = item.title?.toString() || item.name || 'Unknown Song';
+        let artist = 'Unknown Artist';
+        if (item.artists && Array.isArray(item.artists) && item.artists.length > 0) {
+          artist = item.artists.map((a: any) => a.name).join(', ');
+        } else if (item.author?.name) {
+          artist = item.author.name;
+        }
+
+        const album = item.album?.name || null;
+        let duration = 180;
+        if (item.duration?.seconds) {
+          duration = item.duration.seconds;
+        } else if (typeof item.duration === 'number') {
+          duration = item.duration;
+        }
+
+        let thumbnail = `https://i.ytimg.com/vi/${itemId}/hqdefault.jpg`;
+        if (item.thumbnails && item.thumbnails.length > 0) {
+          thumbnail = item.thumbnails[item.thumbnails.length - 1].url;
+        }
+
         songs.push({
-          id: vidId,
+          id: itemId,
           source: 'youtube',
-          title: v.title?.toString() || 'Unknown Title',
-          artist: v.author?.name || 'Unknown Artist',
-          channel: v.author?.name || 'YouTube',
-          album: null,
-          thumbnail: v.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`,
-          duration: v.duration?.seconds || 180,
-          url: `https://www.youtube.com/watch?v=${vidId}`,
+          title,
+          artist,
+          channel: artist,
+          album,
+          thumbnail,
+          duration,
+          url: `https://www.youtube.com/watch?v=${itemId}`,
           isPlayable: true
         });
       }
+
+      if (songs.length < 3) {
+        const generalSearch = await withTimeout(yt.search(query + ' audio', { type: 'video' }), 4000);
+        const videos: any[] = (generalSearch as any).videos || [];
+        for (const v of videos) {
+          const vidId = v?.id || v?.video_id;
+          if (!vidId || songs.some((s) => s.id === vidId)) continue;
+          songs.push({
+            id: vidId,
+            source: 'youtube',
+            title: v.title?.toString() || 'Unknown Title',
+            artist: v.author?.name || 'Unknown Artist',
+            channel: v.author?.name || 'YouTube',
+            album: null,
+            thumbnail: v.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`,
+            duration: v.duration?.seconds || 180,
+            url: `https://www.youtube.com/watch?v=${vidId}`,
+            isPlayable: true
+          });
+        }
+      }
+    } catch {
+      // Innertube failed, will try Piped fallback
     }
-  } catch {
-    // Innertube failed, will try piped fallback
+
+    let finalSongs = songs;
+    if (finalSongs.length === 0) {
+      finalSongs = await searchPiped(query);
+    }
+
+    const seen = new Set<string>();
+    const unique = finalSongs.filter((s) => {
+      if (!s?.id || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, max-age=300');
+    return res.status(200).json({ query, results: unique, count: unique.length });
+  } catch (err: any) {
+    return res.status(500).json({
+      error: 'Search failed',
+      details: err?.message || 'Unknown error',
+      results: []
+    });
   }
-
-  let finalSongs = songs;
-  if (finalSongs.length === 0) {
-    finalSongs = await searchPiped(query);
-  }
-
-  // Deduplicate
-  const seen = new Set<string>();
-  const unique = finalSongs.filter(s => {
-    if (seen.has(s.id)) return false;
-    seen.add(s.id);
-    return true;
-  });
-
-  return res.status(200).json({ query, results: unique, count: unique.length });
 }

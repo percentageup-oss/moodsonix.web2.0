@@ -19,7 +19,6 @@ async function fetchNeteaseJson(url: string, timeoutMs: number): Promise<any | n
     if (!res.ok) return null;
 
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
-    // Netease API responds with JSON payload using either application/json or text/plain; reject HTML error pages
     if (
       (!contentType.includes('application/json') && !contentType.includes('text/plain')) ||
       contentType.includes('text/html')
@@ -27,7 +26,9 @@ async function fetchNeteaseJson(url: string, timeoutMs: number): Promise<any | n
       return null;
     }
 
-    return await res.json();
+    const text = await res.text();
+    if (!text || !text.trim().startsWith('{')) return null;
+    return JSON.parse(text);
   } catch {
     return null;
   } finally {
@@ -36,6 +37,7 @@ async function fetchNeteaseJson(url: string, timeoutMs: number): Promise<any | n
 }
 
 export default async function handler(req: any, res: any) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
@@ -45,24 +47,23 @@ export default async function handler(req: any, res: any) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
-
-  const songId = ((req.query?.id as string) || '').trim();
-  const artist = ((req.query?.artist as string) || '').trim();
-  const title = ((req.query?.title as string) || '').trim();
-  const targetDuration = parseFloat((req.query?.duration as string) || '0') || 0;
-
-  const searchTerm = [artist, title].filter(Boolean).join(' ').trim();
-  if (!searchTerm) {
-    return res.status(200).json({ songId, lrc: null, notFound: true });
-  }
-
-  const startTime = Date.now();
-  const TOTAL_BUDGET_MS = 4800;
 
   try {
+    const songId = String(req.query?.id || '').trim();
+    const artist = String(req.query?.artist || '').trim();
+    const title = String(req.query?.title || '').trim();
+    const targetDuration = parseFloat(String(req.query?.duration || '0')) || 0;
+
+    const searchTerm = [artist, title].filter(Boolean).join(' ').trim();
+    if (!searchTerm) {
+      return res.status(200).json({ songId, lrc: null, notFound: true });
+    }
+
+    const startTime = Date.now();
+    const TOTAL_BUDGET_MS = 4800;
+
     const encodedQuery = encodeURIComponent(searchTerm).replace(/%20/g, '+');
     const searchUrl = `https://music.163.com/api/search/get?s=${encodedQuery}&type=1&limit=5`;
     const searchData = await fetchNeteaseJson(searchUrl, 2600);
@@ -72,7 +73,6 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ songId, lrc: null, notFound: true });
     }
 
-    // Pick the result whose duration is closest to the current song (Netease durations are in ms)
     let bestSong = songs.find((s) => s && s.id) || songs[0];
     if (targetDuration > 0) {
       let minDiff = Infinity;
@@ -101,13 +101,18 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ songId, lrc: null, notFound: true });
     }
 
+    res.setHeader('Cache-Control', 'public, s-maxage=86400, max-age=3600');
     return res.status(200).json({
       songId,
       neteaseId: bestSong.id,
       lrc: rawLyric,
       notFound: false
     });
-  } catch {
-    return res.status(200).json({ songId, lrc: null, notFound: true });
+  } catch (err: any) {
+    return res.status(500).json({
+      error: err?.message || 'Netease lyrics lookup failed',
+      lrc: null,
+      notFound: true
+    });
   }
 }

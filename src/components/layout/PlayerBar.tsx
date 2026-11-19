@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useQueue } from '../../context/QueueContext';
 import { usePlaylists } from '../../context/PlaylistContext';
@@ -53,6 +53,9 @@ export const PlayerBar: React.FC = () => {
     previousTrack,
     isNowPlayingOpen,
     setIsNowPlayingOpen,
+    setIsNowPlayingDraggingOpen,
+    nowPlayingDragUpPxRef,
+    nowPlayingSheetControlsRef,
     isVideoOpen,
     toggleVideo,
     playerError,
@@ -62,6 +65,176 @@ export const PlayerBar: React.FC = () => {
   const { toggleLike, isLiked } = useQueue();
   const { setAddToPlaylistTarget } = usePlaylists();
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+
+  const footerRef = useRef<HTMLElement | null>(null);
+  const suppressClickRef = useRef(false);
+  const dragRef = useRef<{
+    pointerId: number | null;
+    eligible: boolean;
+    active: boolean;
+    captured: boolean;
+    startX: number;
+    startY: number;
+    startTime: number;
+    currentDragUpPx: number;
+    samples: Array<{ y: number; t: number }>;
+  }>({
+    pointerId: null,
+    eligible: false,
+    active: false,
+    captured: false,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    currentDragUpPx: 0,
+    samples: []
+  });
+
+  const DRAG_SLOP_PX = 6;
+  const OPEN_DISTANCE_PX = 80;
+  const OPEN_VELOCITY_PX_MS = 0.5;
+
+  const handleBarPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (!e.isPrimary) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (isNowPlayingOpen) return;
+
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // Never start swipe if touch/pointer begins on interactive controls or sliders
+      if (target.closest('button, a, input, select, textarea, [role="slider"], [data-no-drag]')) {
+        dragRef.current.eligible = false;
+        return;
+      }
+
+      const now = performance.now();
+      dragRef.current = {
+        pointerId: e.pointerId,
+        eligible: true,
+        active: false,
+        captured: false,
+        startX: e.clientX,
+        startY: e.clientY,
+        startTime: now,
+        currentDragUpPx: 0,
+        samples: [{ y: e.clientY, t: now }]
+      };
+    },
+    [isNowPlayingOpen]
+  );
+
+  const handleBarPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      const g = dragRef.current;
+      if (!g.eligible || g.pointerId !== e.pointerId) return;
+
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY; // Negative when dragging UP
+
+      if (!g.active) {
+        // Cancel if user drags down
+        if (dy > DRAG_SLOP_PX) {
+          g.eligible = false;
+          return;
+        }
+
+        // Wait for minimal drag slop so taps still open normally
+        if (Math.abs(dy) < DRAG_SLOP_PX && Math.abs(dx) < DRAG_SLOP_PX) {
+          return;
+        }
+
+        // Reject horizontal gestures
+        if (Math.abs(dx) > Math.abs(dy)) {
+          g.eligible = false;
+          return;
+        }
+
+        if (dy <= -DRAG_SLOP_PX) {
+          g.active = true;
+          const initialUpPx = Math.max(0, -dy);
+          g.currentDragUpPx = initialUpPx;
+          nowPlayingDragUpPxRef.current = initialUpPx;
+          setIsNowPlayingDraggingOpen(true);
+
+          try {
+            footerRef.current?.setPointerCapture(e.pointerId);
+            g.captured = true;
+          } catch {}
+        } else {
+          return;
+        }
+      }
+
+      const viewportH = Math.max(window.innerHeight || 800, 1);
+      const dragUpPx = Math.max(0, Math.min(viewportH, g.startY - e.clientY));
+      g.currentDragUpPx = dragUpPx;
+      nowPlayingDragUpPxRef.current = dragUpPx;
+
+      const now = performance.now();
+      g.samples.push({ y: e.clientY, t: now });
+      if (g.samples.length > 6) {
+        g.samples.shift();
+      }
+
+      nowPlayingSheetControlsRef.current?.updateDrag(dragUpPx);
+    },
+    [nowPlayingDragUpPxRef, nowPlayingSheetControlsRef, setIsNowPlayingDraggingOpen]
+  );
+
+  const finishBarDrag = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      const g = dragRef.current;
+      if (g.pointerId !== e.pointerId) return;
+
+      if (g.captured) {
+        try {
+          footerRef.current?.releasePointerCapture(e.pointerId);
+        } catch {}
+      }
+
+      const wasActive = g.active;
+      const finalDragUpPx = g.currentDragUpPx;
+      const samples = g.samples;
+      const startY = g.startY;
+      const startTime = g.startTime;
+
+      g.pointerId = null;
+      g.eligible = false;
+      g.active = false;
+      g.captured = false;
+      g.currentDragUpPx = 0;
+
+      if (!wasActive) return;
+
+      suppressClickRef.current = true;
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 180);
+
+      const now = performance.now();
+      const recent = samples.filter((s) => now - s.t <= 100);
+      const refSample = recent[0] ?? samples[0] ?? { y: startY, t: startTime };
+      const latestSample = samples[samples.length - 1] ?? refSample;
+      const dt = Math.max(1, latestSample.t - refSample.t);
+      const velocityUp = (refSample.y - latestSample.y) / dt; // positive px/ms upward
+
+      const shouldOpen =
+        e.type !== 'pointercancel' &&
+        (finalDragUpPx > OPEN_DISTANCE_PX || (finalDragUpPx > 12 && velocityUp > OPEN_VELOCITY_PX_MS));
+
+      if (nowPlayingSheetControlsRef.current) {
+        nowPlayingSheetControlsRef.current.finishDrag(shouldOpen, finalDragUpPx);
+      } else {
+        setIsNowPlayingDraggingOpen(false);
+        if (shouldOpen) {
+          setIsNowPlayingOpen(true);
+        }
+      }
+    },
+    [nowPlayingSheetControlsRef, setIsNowPlayingDraggingOpen, setIsNowPlayingOpen]
+  );
 
   if (!currentSong) return null;
 
@@ -100,10 +273,28 @@ export const PlayerBar: React.FC = () => {
       )}
 
       {/* Main Player Bar */}
-      <footer className="fixed bottom-[53px] md:bottom-0 left-0 right-0 z-30 bg-[var(--surface-elevated)]/95 backdrop-blur-xl border-t border-[var(--border-color)] px-4 py-2.5 md:py-3 select-none">
+      <footer
+        ref={footerRef}
+        onPointerDown={handleBarPointerDown}
+        onPointerMove={handleBarPointerMove}
+        onPointerUp={finishBarDrag}
+        onPointerCancel={finishBarDrag}
+        onClickCapture={(e) => {
+          if (suppressClickRef.current) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }}
+        style={{ touchAction: 'none' }}
+        className="fixed bottom-[53px] md:bottom-0 left-0 right-0 z-30 bg-[var(--surface-elevated)]/95 backdrop-blur-xl border-t border-[var(--border-color)] px-4 py-2.5 md:py-3 select-none"
+      >
         {/* MOBILE MINI-PLAYER (compact row) */}
         <div
-          onClick={() => setIsNowPlayingOpen(true)}
+          onClick={() => {
+            if (!suppressClickRef.current) {
+              setIsNowPlayingOpen(true);
+            }
+          }}
           className="md:hidden flex items-center justify-between gap-3 cursor-pointer"
         >
           {/* Track info & Artwork */}
@@ -181,7 +372,7 @@ export const PlayerBar: React.FC = () => {
 
           {/* Mobile progress line along top */}
           <div
-            className="absolute top-0 left-0 right-0 h-[2px] bg-[var(--surface-secondary)]"
+            className="absolute top-0 left-0 right-0 h-[2px] bg-[var(--surface-secondary)] pointer-events-none"
           >
             <div
               className="h-full bg-[var(--accent)] transition-all duration-200"
@@ -361,10 +552,11 @@ export const PlayerBar: React.FC = () => {
               {showQualityMenu && (
                 <>
                   <div
+                    data-no-drag="true"
                     className="fixed inset-0 z-40"
                     onClick={() => setShowQualityMenu(false)}
                   />
-                  <div className="absolute bottom-full right-0 mb-3 z-50">
+                  <div data-no-drag="true" className="absolute bottom-full right-0 mb-3 z-50">
                     <QualityMenu onClose={() => setShowQualityMenu(false)} />
                   </div>
                 </>

@@ -1,12 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQueue } from '../context/QueueContext';
 import { usePlaylists } from '../context/PlaylistContext';
 import { usePlayer } from '../context/PlayerContext';
 import { useArtistNavigation } from '../context/ArtistNavigationContext';
 import { useToast } from '../context/ToastContext';
 import { Song } from '../types/music';
+import { FollowedArtist } from '../types/artist';
 import { SongRow } from '../components/music/SongRow';
 import { CreatePlaylistModal } from '../components/music/CreatePlaylistModal';
+import {
+  fetchArtistImage,
+  getCachedArtistImage,
+  invalidateCachedArtistImage
+} from '../services/artistImage';
 import {
   Heart,
   Play,
@@ -31,6 +37,80 @@ interface LikedSongsPageProps {
   onNavigate: (page: string) => void;
   onOpenPlaylist: (playlistId: string) => void;
 }
+
+const FollowedArtistCard: React.FC<{
+  artist: FollowedArtist;
+  onOpen: () => void;
+  onToggleFollow: () => void;
+}> = ({ artist, onOpen, onToggleFollow }) => {
+  const [imgUrl, setImgUrl] = useState<string | null>(
+    () => getCachedArtistImage(artist.name) || artist.avatarUrl || null
+  );
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+    const cached = getCachedArtistImage(artist.name);
+    if (cached) {
+      setImgUrl(cached);
+      return;
+    }
+    const controller = new AbortController();
+    fetchArtistImage(artist.name, controller.signal).then((url) => {
+      if (!controller.signal.aborted && url) {
+        setImgUrl(url);
+      }
+    });
+    return () => controller.abort();
+  }, [artist.name, artist.avatarUrl]);
+
+  const initial = artist.name ? artist.name.charAt(0).toUpperCase() : 'A';
+  const showImage = Boolean(imgUrl && !imgError);
+
+  return (
+    <div
+      className="group relative flex flex-col items-center p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border-color)] hover:border-[var(--accent)]/40 hover:bg-[var(--surface-secondary)] transition-all cursor-pointer shadow-sm text-center"
+      onClick={onOpen}
+    >
+      <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden mb-3 border-2 border-white/10 group-hover:border-[var(--accent)] transition-all shadow-md bg-[var(--surface-elevated)]">
+        {showImage ? (
+          <img
+            src={imgUrl!}
+            alt={artist.name}
+            referrerPolicy="no-referrer"
+            onError={() => {
+              invalidateCachedArtistImage(artist.name);
+              setImgError(true);
+            }}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-950 to-slate-900 text-[var(--accent)] font-mono font-bold text-2xl">
+            {initial}
+          </div>
+        )}
+      </div>
+
+      <p className="font-bold text-xs sm:text-sm text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors truncate w-full">
+        {artist.name}
+      </p>
+      <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5 w-full">
+        {artist.genre || artist.monthlyListeners || 'Artist'}
+      </p>
+
+      <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={onToggleFollow}
+          title="Unfollow artist"
+          className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-[var(--surface-elevated)] text-[var(--accent)] border border-[var(--accent)]/30 hover:border-red-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+        >
+          <UserCheck className="w-3 h-3" />
+          <span>Following</span>
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const LikedSongsPage: React.FC<LikedSongsPageProps> = ({
   onShareSong,
@@ -501,49 +581,14 @@ export const LikedSongsPage: React.FC<LikedSongsPageProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {filteredArtists.map((artist) => {
-                const initial = artist.name ? artist.name.charAt(0).toUpperCase() : 'A';
-
-                return (
-                  <div
-                    key={artist.id}
-                    className="group relative flex flex-col items-center p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border-color)] hover:border-[var(--accent)]/40 hover:bg-[var(--surface-secondary)] transition-all cursor-pointer shadow-sm text-center"
-                    onClick={() => openArtist(artist.name)}
-                  >
-                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden mb-3 border-2 border-white/10 group-hover:border-[var(--accent)] transition-all shadow-md bg-[var(--surface-elevated)]">
-                      {artist.avatarUrl ? (
-                        <img
-                          src={artist.avatarUrl}
-                          alt={artist.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-950 to-slate-900 text-[var(--accent)] font-mono font-bold text-2xl">
-                          {initial}
-                        </div>
-                      )}
-                    </div>
-
-                    <p className="font-bold text-xs sm:text-sm text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors truncate w-full">
-                      {artist.name}
-                    </p>
-                    <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5 w-full">
-                      {artist.genre || artist.monthlyListeners || 'Artist'}
-                    </p>
-
-                    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => toggleFollowArtist(artist)}
-                        title="Unfollow artist"
-                        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-[var(--surface-elevated)] text-[var(--accent)] border border-[var(--accent)]/30 hover:border-red-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                      >
-                        <UserCheck className="w-3 h-3" />
-                        <span>Following</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredArtists.map((artist) => (
+                <FollowedArtistCard
+                  key={artist.id}
+                  artist={artist}
+                  onOpen={() => openArtist(artist.name)}
+                  onToggleFollow={() => toggleFollowArtist(artist)}
+                />
+              ))}
             </div>
           )}
         </div>

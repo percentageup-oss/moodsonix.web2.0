@@ -1,6 +1,8 @@
 import { ItunesArtist, ItunesSong, ItunesAlbum, ArtistProfileData } from '../types/artist';
 import { Song } from '../types/music';
 import { generateMonthlyListeners } from '../lib/artistUtils';
+import { fetchArtistImage, getCachedArtistImage } from './artistImage';
+import { safeJsonResponse } from './musicApi';
 
 // In-memory cache for instant revisiting of artist profiles
 const artistProfileCache = new Map<string, ArtistProfileData>();
@@ -101,9 +103,9 @@ async function fetchArtistVideos(artistName: string, signal?: AbortSignal): Prom
     const query = `${artistName} official video`;
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal });
     if (!res.ok) return [];
-    const json = await res.json();
-    if (Array.isArray(json?.results)) {
-      return json.results.slice(0, 10);
+    const { data, isJson } = await safeJsonResponse<{ results?: Song[] }>(res);
+    if (isJson && Array.isArray(data?.results)) {
+      return data.results.slice(0, 10);
     }
   } catch {
     // Graceful fallback
@@ -187,9 +189,14 @@ export async function fetchArtistProfile(
   // If we still don't have a numeric ID (e.g. indie artist not on iTunes), fallback directly to YouTube search
   if (isNaN(Number(resolvedId))) {
     try {
-      const ytRes = await fetch(`/api/search?q=${encodeURIComponent(resolvedName)}`, { signal });
-      const ytData = ytRes.ok ? await ytRes.json() : null;
-      const ytSongs: Song[] = ytData?.results || [];
+      const [ytRes, ytAvatarUrl] = await Promise.all([
+        fetch(`/api/search?q=${encodeURIComponent(resolvedName)}`, { signal }),
+        fetchArtistImage(resolvedName, signal).catch(() => getCachedArtistImage(resolvedName))
+      ]);
+      const parsedYt = ytRes.ok
+        ? await safeJsonResponse<{ results?: Song[] }>(ytRes)
+        : { data: null, isJson: false };
+      const ytSongs: Song[] = parsedYt.isJson ? (parsedYt.data?.results || []) : [];
 
       if (ytSongs.length === 0) {
         return { data: null, error: `Artist "${resolvedName}" not found.` };
@@ -212,10 +219,10 @@ export async function fetchArtistProfile(
           artistName: resolvedName,
           primaryGenreName: resolvedGenre || 'Independent Music',
           artworkUrl: topThumb || undefined,
-          avatarUrl: topThumb || undefined
+          avatarUrl: ytAvatarUrl || undefined
         },
         topArtwork: topThumb,
-        avatarUrl: topThumb,
+        avatarUrl: ytAvatarUrl,
         monthlyListeners: generateMonthlyListeners(resolvedName),
         bio: `${resolvedName} is an active music artist featured on Moodsonix streaming. Listen to their most popular songs, trending music videos, and discography below.`,
         popularSongs: itunesSongs.slice(0, 5),
@@ -339,7 +346,6 @@ export async function fetchArtistProfile(
     const topSong = rawTracks[0];
     const rawTopArtwork = topAlbum?.artworkUrl100 || topSong?.artworkUrl100 || null;
     const topArtwork = rawTopArtwork ? upscaleArtwork(rawTopArtwork) : null;
-    const avatarUrl = topArtwork;
 
     // Top 5 songs as Popular section
     const popularSongs = rawTracks.slice(0, 5);
@@ -360,8 +366,9 @@ export async function fetchArtistProfile(
       }
     }
 
-    // Parallel fetch videos and similar artists
-    const [videos, similarArtists] = await Promise.all([
+    // Parallel fetch real YouTube channel picture, videos, and similar artists
+    const [avatarUrl, videos, similarArtists] = await Promise.all([
+      fetchArtistImage(artistName, signal).catch(() => getCachedArtistImage(artistName)),
       fetchArtistVideos(artistName, signal).catch(() => []),
       fetchSimilarArtists(artistName, primaryGenreName, signal).catch(() => [])
     ]);
@@ -376,7 +383,7 @@ export async function fetchArtistProfile(
         avatarUrl: avatarUrl || undefined
       },
       topArtwork,
-      avatarUrl,
+      avatarUrl: avatarUrl || null,
       monthlyListeners: generateMonthlyListeners(artistName),
       bio: `${artistName} is a acclaimed ${primaryGenreName.toLowerCase()} music artist. Explore their discography, full track catalogue, popular singles, and official YouTube music videos.`,
       popularSongs,
